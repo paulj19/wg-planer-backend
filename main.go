@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -27,32 +28,31 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
-	floorJson := []byte(`
-	{
-  "name": "Floor1A",
-  "residents": [
-    "762b569bffebb4b815cd5e78",
-    "762b5ace2337d3c989bcc238",
-    "762b5f46cd8a580b287a8d84"
-  ],
-  "tasks": [
-    {
-      "name": "Gelbersack entfernen",
-      "assignedTo": "662b5f46cd8a580b287a8d84"
-    },
-    {
-      "name": "Biomüll wegbringen",
-      "assignedTo": "662b569bffebb4b815cd5e78"
-    },
-    {
-      "name": "Restmull wegbringen",
-      "assignedTo": "662b569bffebb4b815cd5e78"
-    }
-  ]}`)
-	id, err := insertNewFloor(floorJson)
-	if err != nil {
-		log.Println("error inserting new floor", err)
-	}
-	fmt.Println(id)
+	http.HandleFunc("/floor", addNewFloor)
+	// id, err := insertNewFloor()
+	// if err != nil {
+	// 	log.Println("error inserting new floor", err)
+	// }
+	// fmt.Println(id)
 	defer disconnectMongo(ctx)
+	log.Println("Server running on port 8080")
+	http.ListenAndServe(":8080", nil)
+}
+
+func addNewFloor(w http.ResponseWriter, r *http.Request) {
+	var floor Floor
+	err := json.NewDecoder(r.Body).Decode(&floor)
+	if err != nil {
+		http.Error(w, "Error reading request body, bad format", http.StatusBadRequest)
+		return
+	}
+	id, err := insertNewFloor(floor)
+	if err != nil {
+		http.Error(w, "Error inserting new floor", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"id": id})
+
+	// json.NewEncoder(w).Encode(fmt.Sprintf("{\"id\": \"%s\"}", id))
 }

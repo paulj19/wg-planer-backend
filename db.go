@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -41,10 +40,7 @@ func disconnectMongo(ctx context.Context) {
 	}
 }
 
-func insertNewFloor(floor_ []byte) (string, error) {
-	var floor Floor
-	var insertedID primitive.ObjectID
-	json.Unmarshal(floor_, &floor)
+func insertNewFloor(floor Floor) (string, error) {
 	log.Println("adding new floor: ", floor)
 	res, err := collection.InsertOne(context.Background(), floor)
 	if err != nil {
@@ -54,13 +50,5 @@ func insertNewFloor(floor_ []byte) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("newly inserted id could not be retrieved")
 	}
-
-	// // Convert to string
-	// return res.InsertedID.String()
-	log.Println(insertedID)
-	// data, err := bson.Marshal(res)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("newly inserted id could not be retrieved")
-	// }
 	return insertedID.Hex(), nil
 }
