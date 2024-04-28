@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -51,4 +52,17 @@ func insertNewFloor(floor Floor) (string, error) {
 		return "", fmt.Errorf("newly inserted id could not be retrieved")
 	}
 	return insertedID.Hex(), nil
+}
+
+func getFloor(floorId string) (Floor, error) {
+	var floor Floor
+	objectId, err := primitive.ObjectIDFromHex(floorId)
+	if err != nil {
+		return floor, err
+	}
+	err = collection.FindOne(context.Background(), bson.M{"_id": objectId}).Decode(&floor)
+	if err != nil {
+		return floor, err
+	}
+	return floor, nil
 }
