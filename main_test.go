@@ -36,7 +36,25 @@ var floor = `{
       "name": "Restmull wegbringen",
       "assignedTo": "662b569bffebb4b815cd5e78"
     }
-  ]}`
+  ],
+  "rooms": [
+    {
+      "number": 1,
+			"order": 1,
+      "resident": "762b569bffebb4b815cd5e78"
+    },
+    {
+      "number": 2,
+			"order": 2,
+      "resident": "762b5ace2337d3c989bcc238"
+    },
+    {
+      "number": 3,
+			"order": 3,
+      "resident": "762b5f46cd8a580b287a8d84"
+    }
+  ]
+}`
 
 func TestMain(m *testing.M) {
 	log.Println("setting up test environment")
@@ -90,28 +108,8 @@ func Test_InsertNewFloor(t *testing.T) {
 }
 
 func Test_Return400WhenBadJsonFormat(t *testing.T) {
-	floor := `{
-	"name": "Floor1A",
-	"residents": [
-		"762b569bffebb4b815cd5e78",
-		"762b5ace2337d3c989bcc238",
-		"762b5f46cd8a580b287a8d84"
-	],
-	"tasks": [
-			: "Gelbersack entfernen",
-			"assignedTo": "662b5f46cd8a580b287a8d84"
-		},
-		{
-			"name": "Biomüll wegbringen",
-			"assignedTo": "662b569bffebb4b815cd5e78"
-		},
-		{
-			"name": "Restmull wegbringen",
-			"assignedTo": "662b569bffebb4b815cd5e78"
-		}
-	]`
-
-	req, err := http.NewRequest("POST", "/floor", strings.NewReader(floor))
+	floor_ := floor[:len(floor)-1]
+	req, err := http.NewRequest("POST", "/floor", strings.NewReader(floor_))
 	if err != nil {
 		t.Fatal(err)
 	}
