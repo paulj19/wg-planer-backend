@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -41,17 +40,23 @@ func disconnectMongo(ctx context.Context) {
 	}
 }
 
-func insertNewFloor(floor Floor) (string, error) {
+func insertNewFloor(floor Floor) (Floor, error) {
 	log.Println("adding new floor: ", floor)
 	res, err := collection.InsertOne(context.Background(), floor)
 	if err != nil {
 		log.Fatal(err)
 	}
-	insertedID, ok := res.InsertedID.(primitive.ObjectID)
-	if !ok {
-		return "", fmt.Errorf("newly inserted id could not be retrieved")
+	// insertedID, ok := res.InsertedID.(primitive.ObjectID)
+	// if !ok {
+	// 	return "", fmt.Errorf("newly inserted id could not be retrieved")
+	// }
+	// return insertedID.Hex(), nil
+	var newFloor Floor
+	err = collection.FindOne(context.Background(), bson.M{"_id": res.InsertedID}).Decode(&newFloor)
+	if err != nil {
+		panic(err)
 	}
-	return insertedID.Hex(), nil
+	return newFloor, nil
 }
 
 func getFloor(floorId string) (Floor, error) {
