@@ -72,13 +72,12 @@ func TestMain(m *testing.M) {
 }
 
 func Test_InsertNewFloor(t *testing.T) {
-	m := Maino{}
 	req, err := http.NewRequest("POST", "/floor", strings.NewReader(floor))
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(m.curdFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -92,14 +91,13 @@ func Test_InsertNewFloor(t *testing.T) {
 }
 
 func Test_Return400WhenBadJsonFormat(t *testing.T) {
-	m := Maino{}
 	floor_ := floor[:len(floor)-1]
 	req, err := http.NewRequest("POST", "/floor", strings.NewReader(floor_))
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(m.curdFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
@@ -117,6 +115,7 @@ func Test_GetExistingFloor(t *testing.T) {
 	var floor_ Floor
 	json.Unmarshal([]byte(floor), &floor_)
 	floor, err := insertNewFloor(floor_)
+	fmt.Println("floorId xXX", floor.Id)
 
 	if err != nil {
 		t.Fatal(err)
@@ -133,16 +132,15 @@ func Test_GetExistingFloor(t *testing.T) {
 
 	authServiceMock := new(AuthServiceMock)
 	authServiceMock.On("getUserProfile", mock.Anything).Return(userprofile, nil)
-	authServiceMock.On("verifyToken", mock.Anything).Return("", floor.Id.String(), nil)
+	authServiceMock.On("verifyToken", mock.Anything).Return("", floor.Id.String()[10:len(floor.Id.String())-2], nil)
 
-	m := Maino{}
-	m.initAuthService(authServiceMock)
+	initAuthService(authServiceMock)
 	req, err := http.NewRequest("GET", "/floor", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(m.curdFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -162,10 +160,10 @@ func Test_GetExistingFloor(t *testing.T) {
 		t.Fatal(err)
 	}
 	floor_.Id = responseId
-	getFloorResponse := GetFloorResponse{Floor: floor_, User: userprofile}
+	getFloorResponse := GetFloorResponse{Floor: floor_, UserProfile: userprofile}
 
 	if !reflect.DeepEqual(response, getFloorResponse) {
-		t.Errorf("handler returned wrong body: got %v want %v", response, floor_)
+		t.Errorf("handler returned wrong body: got %v want %v", response, getFloorResponse)
 	}
 }
 

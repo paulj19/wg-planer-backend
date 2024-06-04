@@ -40,17 +40,17 @@ type Room struct {
 }
 
 type UserProfile struct {
-	Id         string `json:"id"`
+	Id         int64  `json:"id"`
 	Username   string `json:"username"`
 	Email      string `json:"email"`
 	FloorId    string `json:"floorId"`
-	Oid        string `json:"oid"`
+	Oid        int64  `json:"oid"`
 	AuthServer string `json:"authServer"`
 }
 
 type GetFloorResponse struct {
-	Floor Floor       `json:"floor"`
-	User  UserProfile `json:"user"`
+	Floor       Floor       `json:"floor"`
+	UserProfile UserProfile `json:"userprofile"`
 }
 
 // type Resident struct {
@@ -58,9 +58,7 @@ type GetFloorResponse struct {
 //   AssignedTo string `bson:"assignedTo"`
 // }
 
-type Maino struct {
-	authService AuthService
-}
+var authService AuthService
 
 func main() {
 	var err error
@@ -71,22 +69,57 @@ func main() {
 	if err != nil {
 		log.Fatal("Error initing public key", err)
 	}
-	m := Maino{}
 
-	m.initAuthService(AuthServiceImpl{pubKey: pubKey})
+	initAuthService(AuthServiceImpl{pubKey: pubKey})
 
-	http.HandleFunc("/floor/", m.curdFloor)
+	http.HandleFunc("/floor/", curdFloor)
+	http.HandleFunc("/post-login", startupInfo)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func (m Maino) initAuthService(as AuthService) {
-	m.authService = as
+func initAuthService(as AuthService) {
+	authService = as
 }
 
-func (m Maino) curdFloor(w http.ResponseWriter, r *http.Request) {
+func startupInfo(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	authToken := r.Header.Get("Authorization")
+	if authToken == "" {
+		http.Error(w, "No token provided", http.StatusUnauthorized)
+	}
+	authToken = authToken[7:]
+	floorId, err := authService.verifyToken(authToken)
+	if err != nil {
+		return
+	}
+
+	floor, err := getFloor(floorId)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userprofile, err := authService.getUserProfile(authToken)
+	if err != nil {
+		http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userprofile == (UserProfile{}) {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	getFloorResponse := GetFloorResponse{Floor: floor, UserProfile: userprofile}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(getFloorResponse)
+}
+
+func curdFloor(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
 	switch r.Method {
 	case http.MethodPost:
@@ -104,35 +137,18 @@ func (m Maino) curdFloor(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(newFloor)
 	case http.MethodGet:
-		userId, floorId, err := m.authService.verifyToken(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
+		floorId := r.URL.Path[len("/floor/"):]
 		floor, err := getFloor(floorId)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				http.Error(w, "Floor not found", http.StatusNotFound)
+				http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
-			return
 		}
-		userprofile, err := m.authService.getUserProfile(userId)
-		if err != nil {
-			http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if userprofile == (UserProfile{}) {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		getFloorResponse := GetFloorResponse{Floor: floor, User: userprofile}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(getFloorResponse)
+		json.NewEncoder(w).Encode(floor)
 	case http.MethodOptions:
-		fmt.Println("OPTIONS FLOOR", r.URL.Path)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -140,39 +156,65 @@ func (m Maino) curdFloor(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
+	httpClient := &http.Client{}
+
+	req, err := http.NewRequest("GET", "http://192.168.0.108:8081/oauth2/jwks", nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating http request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting JWKS: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Error getting JWKS: %w", err)
+	}
+	// var jwks string
+	var jwks map[string][]map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&jwks)
+	if err != nil {
+		return nil, fmt.Errorf("Error decoding JWKS: %w", err)
+	}
+	return jwks, nil
+}
+
 func initAuthServerPubKey() (*rsa.PublicKey, error) {
-	jwksJSON := `{"keys":[{"kty":"RSA","e":"AQAB","kid":"88d798cc-358f-491d-9fbd-8e52e165fc59","n":"pMusbA_4YWpIV9jRvghXxCK11gLJM90kRGMd6wRatT7MRZHlGdt9nPjN_kLn051Dy5cH7wbqYzZYvWxRjvHPG_dWJ115G6ddX16BMe8sb-HUMWvx39sA3t5I9GtaZjbkQy5NH0W7147s4NF_96eUQ2qzaAKpgA3GcHQ1iLqtr4VZgIn5R9RWO_8Uc81MuLIs08_sBnP84rECSB0LN3hi9_KMHX-PyshvGiyB6RrvHuq3QIQZRnrvDhFRjLlounJ5CErHC8aDpcxkjnj70wSuZnSsD73V2Yo4_-5Ou6CtYHCSCULE1uSojhNMBNhQL3OE-N6YeaKrlXY_JwhLaCBHPQ"}]}`
+	// jwksJSON := `{"keys":[{"kty":"RSA","e":"AQAB","kid":"63c96dd9-bcca-45f8-8bad-744bb02f3872","n":"4IVGlvJZni-xZ7sgOetXegIKqA6ffQKAMOqp2TjO7b80o7oUGVmr7f6lwQ3L43HT9Lx-PRP5h61Zay3RaI47lsmCqBUHfuutp3ijVpeL5c1YDI9RUjEHrrgK78Rocx8LP2pXgl70TbL9275ugkcCSKm-9_qxTjTjO5azRqtQY0PCZmzt_kfmkNEEw7l6vjzPEY-CEk5EL-bp1g7UEkD3jdlif2fHGpb-Ql5KL7O3ytBt-c8LwDhhtCeFoyejK1p7L8BOr1xcaMVZuXNsDavbpPdh7ml6mSRxrBkSckY4Y2OB3SdOJMS_6CduZkz-LVi9RPian5xJVLmPcs2l_gU6mw"}]}`
+	// jwksJSON := `{"keys":[{"kty":"RSA","e":"AQAB","kid":"4e807cc8-a4fe-4b2c-ba40-571f64c8517d","n":"wGJpVlli_km_JISEmamXdrDPASbZXys0yhCJCZncfmrTt9MM-tKQRJXpvSHK2rILVBtW4KOjguU42kfNHgNxS_xg6O5nsfa5jMsLOJg1lku8a56QA6xrLJ1_mNHFgX1B0psQTUkQXtVWZQZD1shnqNbOEDrwwxx1LbRWbb86KSZnVccPhSQOUxklP3HI64ZS0P3AQlAqDJ6bsRs3hqI12NcQalzALFHWCl0eqZZa19jL3XDqyfCzg8uJ3KJ5Vcvmj-b56aFised8WIhHBSO5ZsYYhjPABFcMaZIOdM5jM-QUGA1WfHV4mGmR6XDmfDsOnDru5xNFqlPMSSBGdTN9kw"}]}`
+	jwks, err := getJwksFromAuthServer()
+	if err != nil {
+		return nil, fmt.Errorf("Error initing pub key, getting JWKS failed: %w", err)
+	}
 
 	// Parse the JWKS
-	var jwks map[string][]map[string]interface{}
-	if err := json.Unmarshal([]byte(jwksJSON), &jwks); err != nil {
-		fmt.Println("Error parsing JWKS:", err)
-		return nil, fmt.Errorf("Error initing pub key, parsing failed: %w", err)
-	}
+	// var jwks map[string][]map[string]interface{}
+	// if err := json.Unmarshal([]byte(jwksJSON), &jwks); err != nil {
+	// 	log.Println("Error parsing JWKS:", err)
+	// 	return nil, fmt.Errorf("Error initing pub key, parsing failed: %w", err)
+	// }
 
 	// Extract the public key
 	var pubKey *rsa.PublicKey
 	for _, key := range jwks["keys"] {
-		if key["kid"].(string) == "88d798cc-358f-491d-9fbd-8e52e165fc59" {
-			modulus := key["n"].(string)
-			exponent := key["e"].(string)
-			n, err := base64.RawURLEncoding.DecodeString(modulus)
-			if err != nil {
-				log.Println("Error decoding modulus:", err)
-				return nil, fmt.Errorf("Error initing pub key, extract public key failed: %w", err)
-			}
-			e, err := base64.RawURLEncoding.DecodeString(exponent)
-			if err != nil {
-				fmt.Println("Error decoding exponent:", err)
-				return nil, fmt.Errorf("Error initing pub key, error decoding exponent: %w", err)
-			}
-			pubKey = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: int(new(big.Int).SetBytes(e).Int64())}
-			break
+		modulus := key["n"].(string)
+		exponent := key["e"].(string)
+		n, err := base64.RawURLEncoding.DecodeString(modulus)
+		if err != nil {
+			log.Println("Error decoding modulus:", err)
+			return nil, fmt.Errorf("Error initing pub key, extract public key failed: %w", err)
 		}
+		e, err := base64.RawURLEncoding.DecodeString(exponent)
+		if err != nil {
+			log.Println("Error decoding exponent:", err)
+			return nil, fmt.Errorf("Error initing pub key, error decoding exponent: %w", err)
+		}
+		pubKey = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: int(new(big.Int).SetBytes(e).Int64())}
+		break
 	}
 
 	if pubKey == nil {
-		fmt.Println("Public key not found")
 		return nil, fmt.Errorf("public key not found")
 	}
 	return pubKey, nil
