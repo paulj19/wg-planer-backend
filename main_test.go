@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -76,7 +77,7 @@ func Test_InsertNewFloor(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(postFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -96,7 +97,7 @@ func Test_Return400WhenBadJsonFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(postFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
@@ -110,19 +111,36 @@ func Test_Return400WhenBadJsonFormat(t *testing.T) {
 }
 
 func Test_GetExistingFloor(t *testing.T) {
+
 	var floor_ Floor
 	json.Unmarshal([]byte(floor), &floor_)
 	floor, err := insertNewFloor(floor_)
+	fmt.Println("floorId xXX", floor.Id)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequest("GET", "/floor/"+floor.Id.String()[len("ObjectID(")+1:25+len("ObjectID(")], nil)
+
+	userprofile := UserProfile{
+		Id:         "123",
+		Username:   "paul",
+		Email:      "paul@xxx.com",
+		FloorId:    floor_.Id.String(),
+		Oid:        "1",
+		AuthServer: "HOME_BREW",
+	}
+
+	authServiceMock := new(AuthServiceMock)
+	authServiceMock.On("getUserProfile", mock.Anything).Return(userprofile, nil)
+	authServiceMock.On("verifyToken", mock.Anything).Return("", floor.Id.String()[10:len(floor.Id.String())-2], nil)
+
+	initAuthService(authServiceMock)
+	req, err := http.NewRequest("GET", "/floor", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(postFloor)
+	handler := http.HandlerFunc(curdFloor)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -130,7 +148,7 @@ func Test_GetExistingFloor(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	var response Floor
+	var response GetFloorResponse
 	err = json.Unmarshal([]byte(rr.Body.String()), &response)
 	if err != nil {
 		t.Errorf("handler returned invalid json")
@@ -142,8 +160,23 @@ func Test_GetExistingFloor(t *testing.T) {
 		t.Fatal(err)
 	}
 	floor_.Id = responseId
+	getFloorResponse := GetFloorResponse{Floor: floor_, UserProfile: userprofile}
 
-	if !reflect.DeepEqual(response, floor_) {
-		t.Errorf("handler returned wrong body: got %v want %v", response, floor_)
+	if !reflect.DeepEqual(response, getFloorResponse) {
+		t.Errorf("handler returned wrong body: got %v want %v", response, getFloorResponse)
 	}
+}
+
+type AuthServiceMock struct {
+	mock.Mock
+}
+
+func (as AuthServiceMock) getUserProfile(userId string) (UserProfile, error) {
+	args := as.Called(userId)
+	return args.Get(0).(UserProfile), args.Error(1)
+}
+
+func (as AuthServiceMock) verifyToken(r *http.Request) (string, string, error) {
+	args := as.Called(r)
+	return args.String(0), args.String(1), args.Error(2)
 }
