@@ -27,16 +27,24 @@ type Floor struct {
 }
 
 type Task struct {
-	Id         string `bson:"id,omitempty"`
-	Name       string `bson:"name,omitempty"`
-	AssignedTo string `bson:"assignedTo,omitempty"`
+	Id             string    `bson:"id,omitempty"`
+	Name           string    `bson:"name,omitempty"`
+	AssignedTo     int64     `bson:"assignedTo,omitempty"`
+	Reminders      int       `bson:"reminders,omitempty"`
+	AssignmentDate time.Time `bson:"assignmentDate,omitempty"`
 }
 
 type Room struct {
-	Id       string `bson:"id,omitempty"`
-	Number   string `bson:"number,omitempty"`
-	Order    int    `bson:"order,omitempty"`
-	Resident string `bson:"resident,omitempty"`
+	Id       int64    `bson:"id,omitempty"`
+	Number   string   `bson:"number,omitempty"`
+	Order    int      `bson:"order,omitempty"`
+	Resident Resident `bson:"resident,omitempty"`
+}
+
+type Resident struct {
+	Id        string `bson:"id,omitempty"`
+	Name      string `bson:"name,omitempty"`
+	Available bool   `bson:"available,omitempty"`
 }
 
 type UserProfile struct {
@@ -60,17 +68,21 @@ type GetFloorResponse struct {
 
 var authService AuthService
 
+type services struct {
+	taskService TaskService
+}
+
 func main() {
-	var err error
+	// var err error
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
-	pubKey, err := initAuthServerPubKey()
-	if err != nil {
-		log.Fatal("Error initing public key", err)
-	}
+	// pubKey, err := initAuthServerPubKey()
+	// if err != nil {
+	// 	log.Fatal("Error initing public key", err)
+	// }
 
-	initAuthService(AuthServiceImpl{pubKey: pubKey})
+	// initAuthService(AuthServiceImpl{pubKey: pubKey})
 
 	http.HandleFunc("/floor/", curdFloor)
 	http.HandleFunc("/post-login", startupInfo)
@@ -126,6 +138,7 @@ func curdFloor(w http.ResponseWriter, r *http.Request) {
 		var floor Floor
 		err := json.NewDecoder(r.Body).Decode(&floor)
 		if err != nil {
+			fmt.Println("Error reading request body", err)
 			http.Error(w, "Error reading request body, bad format", http.StatusBadRequest)
 			return
 		}
@@ -142,7 +155,7 @@ func curdFloor(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				http.Error(w, "Floor not found", http.StatusNotFound)
-				http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
+				// http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
