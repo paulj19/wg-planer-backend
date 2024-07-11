@@ -22,31 +22,31 @@ import (
 
 type Floor struct {
 	Id        primitive.ObjectID `bson:"_id,omitempty"`
-	FloorName string             `bson:"floorName,omitempty"`
-	Residents []string           `bson:"residents,omitempty"`
-	Tasks     []Task             `bson:"tasks,omitempty"`
-	Rooms     []Room             `bson:"rooms,omitempty"`
+	FloorName string             `bson:"floorName"`
+	Residents []string           `bson:"residents"`
+	Tasks     []Task             `bson:"tasks"`
+	Rooms     []Room             `bson:"rooms"`
 }
 
 type Task struct {
-	Id             string    `bson:"id,omitempty"`
-	Name           string    `bson:"name,omitempty"`
-	AssignedTo     int64     `bson:"assignedTo,omitempty"`
-	Reminders      int       `bson:"reminders,omitempty"`
-	AssignmentDate time.Time `bson:"assignmentDate,omitempty"`
+	Id             string    `bson:"id"`
+	Name           string    `bson:"name"`
+	AssignedTo     int64     `bson:"assignedTo"`
+	Reminders      int       `bson:"reminders"`
+	AssignmentDate time.Time `bson:"assignmentDate"`
 }
 
 type Room struct {
-	Id       int64    `bson:"id,omitempty"`
-	Number   string   `bson:"number,omitempty"`
-	Order    int      `bson:"order,omitempty"`
-	Resident Resident `bson:"resident,omitempty"`
+	Id       int64    `bson:"id"`
+	Number   string   `bson:"number"`
+	Order    int      `bson:"order"`
+	Resident Resident `bson:"resident"`
 }
 
 type Resident struct {
-	Id        string `bson:"id,omitempty"`
-	Name      string `bson:"name,omitempty"`
-	Available bool   `bson:"available,omitempty"`
+	Id        string `bson:"id"`
+	Name      string `bson:"name"`
+	Available bool   `bson:"available"`
 }
 
 type UserProfile struct {

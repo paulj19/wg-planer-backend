@@ -6,7 +6,7 @@ curl -v 'http://localhost:8080/floor/' \
     {
       "Id": "0",
       "Name": "Küche reinigen",
-      "AssignedTo": null,
+      "AssignedTo": 0,
       "Reminders": 1,
       "AssignmentDate": "2024-06-13T14:48:00.000Z"
     },
@@ -36,7 +36,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Name": "Gelbersack wegbringen",
       "AssignedTo": 1,
       "Reminders": 3,
-      "AssignmentDate": "2024-06-13T14:48:00.000Z"
+      "AssignmentDate": "2024-06-20T14:48:00.000Z"
     },
     {
       "Id": "5",
@@ -50,7 +50,7 @@ curl -v 'http://localhost:8080/floor/' \
     {
       "Id": 0,
       "Number": "301",
-      "Order": 1,
+      "Order": 0,
       "Resident": {
         "Id": "1",
         "Name": "Max Musterman",
@@ -60,17 +60,17 @@ curl -v 'http://localhost:8080/floor/' \
     {
       "Id": 1,
       "Number": "302",
-      "Order": 2,
+      "Order": 1,
       "Resident": {
         "Id": "2",
         "Name": "Leona Musterman",
-        "Available": true
+        "Available": false
       }
     },
     {
       "Id": 2,
       "Number": "303",
-      "Order": 3,
+      "Order": 2,
       "Resident": {
         "Id": "3",
         "Name": "Evelyn Weber",
@@ -80,17 +80,17 @@ curl -v 'http://localhost:8080/floor/' \
     {
       "Id": 3,
       "Number": "304",
-      "Order": 4,
+      "Order": 3,
       "Resident": {
         "Id": "4",
         "Name": "Nodir Shirinov",
-        "Available": true
+        "Available": false
       }
     },
     {
       "Id": 4,
       "Number": "305",
-      "Order": 5,
+      "Order": 4,
       "Resident": {
         "Id": "5",
         "Name": "Benjamin Renert",
@@ -100,17 +100,17 @@ curl -v 'http://localhost:8080/floor/' \
     {
       "Id": 5,
       "Number": "306",
-      "Order": 6,
+      "Order": 5,
       "Resident": {
         "Id": "6",
         "Name": "Abdul Majeed Nethyahu",
-        "Available": true
+        "Available": false
       }
     },
     {
       "Id": 6,
       "Number": "307",
-      "Order": 7,
+      "Order": 6,
       "Resident": null
     }
   ]

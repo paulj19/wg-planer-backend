@@ -1,0 +1,1 @@
+1. when just one room available for taking task and user press done, task does not get assigned to the same user again. Task assignee is set to null. The user would be confused if the task is assigned again back to him. The ideal fix would be to give a message that no one is available.

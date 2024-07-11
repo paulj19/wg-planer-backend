@@ -90,6 +90,8 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 	nextAss := currentRoom
 	for {
 		nextOrder := (nextAss.Order + 1) % len(f.Rooms)
+		fmt.Println("NEXT O", nextOrder)
+		fmt.Println("NEXT ASS", nextAss)
 		for _, r := range f.Rooms {
 			if r.Order == nextOrder {
 				nextAss = r
@@ -99,6 +101,7 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 		if nextAss.Id == currentRoom.Id { //looped through all rooms => break from inf. loop
 			break
 		}
+		fmt.Println("NEXT III", nextAss, "availa", nextAss.Resident.Available)
 		if nextAss.Resident.Available == true {
 			break
 		}
@@ -111,9 +114,11 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 }
 
 func assignTask(t Task, r Room) Task {
+	fmt.Println("Assigning", r.Id)
 	t.AssignedTo = r.Id
 	t.AssignmentDate = time.Now()
 	t.Reminders = 0
+	fmt.Println("task after ass", t)
 	return t
 }
 
@@ -121,6 +126,7 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 	var taskUpdate TaskUpdate
 	err := json.NewDecoder(r.Body).Decode(&taskUpdate)
 	if err != nil {
+		logger.Error("taskUpdate decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -145,6 +151,7 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 	nextRoom := taskUpdate.NextRoom
 	if taskUpdate.Action == "DONE" {
 		nextRoom, err = nextAssignee(floor, taskUpdate.Task)
+		fmt.Println("NEXT ROOM", nextRoom)
 		if err != nil {
 			logger.Error("taskUpdate nextAssignee", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
 			if err.Error() == "No next assignee available" {

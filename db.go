@@ -84,7 +84,7 @@ func updateDB(f Floor, tNew Task) (Floor, error) {
 	var taskIndex int
 	var fUpdated Floor
 	for i, t := range f.Tasks {
-		if t.Id == t.Id {
+		if t.Id == tNew.Id {
 			f.Tasks[i] = tNew
 			taskIndex = i
 			break
