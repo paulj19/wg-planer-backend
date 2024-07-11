@@ -15,7 +15,7 @@ var floorStub = `{
     {
       "Id": "0",
       "Name": "Küche reinigen",
-      "AssignedTo": null,
+      "AssignedTo": 0,
       "Reminders": 1,
       "AssignmentDate": "2024-06-13T14:48:00.000Z"
     },
@@ -45,7 +45,7 @@ var floorStub = `{
       "Name": "Gelbersack wegbringen",
       "AssignedTo": 1,
       "Reminders": 3,
-      "AssignmentDate": "2024-06-19:48:00.000Z"
+      "AssignmentDate": "2024-06-20T14:48:00.000Z"
     },
     {
       "Id": "5",
@@ -176,14 +176,16 @@ var FloorStub Floor
 
 func TestMain(m *testing.M) {
 	log.Println("setting up test environment")
-	err := json.Unmarshal([]byte(floorStub), &f)
+	err := json.Unmarshal([]byte(floorStub), &FloorStub)
 	if err != nil {
 		log.Fatal("TestSetUp could not unmarshal FloorStub ", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
-	os.Exit(m.Run())
+	code := m.Run()
+	deleteTestFloors(floorsCreated)
+	os.Exit(code)
 }
 
 // func Test_InsertNewFloor(t *testing.T) {
