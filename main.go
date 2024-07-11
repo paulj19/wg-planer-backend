@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 	"net/http"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -72,11 +74,13 @@ type services struct {
 	taskService TaskService
 }
 
+var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 func main() {
-	// var err error
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
+	services := services{taskService: TaskUpdate{}}
 	// pubKey, err := initAuthServerPubKey()
 	// if err != nil {
 	// 	log.Fatal("Error initing public key", err)
@@ -86,6 +90,7 @@ func main() {
 
 	http.HandleFunc("/floor/", curdFloor)
 	http.HandleFunc("/post-login", startupInfo)
+	http.HandleFunc("/task-update", services.taskService.HandleTaskUpdate)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")

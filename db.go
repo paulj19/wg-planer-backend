@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -70,4 +71,35 @@ func getFloor(floorId string) (Floor, error) {
 		return floor, err
 	}
 	return floor, nil
+}
+
+func deleteTestFloors(fIds []primitive.ObjectID) {
+	_, err := collection.DeleteMany(context.Background(), bson.M{"_id": bson.M{"$in": fIds}})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func updateDB(f Floor, tNew Task) (Floor, error) {
+	var taskIndex int
+	var fUpdated Floor
+	for i, t := range f.Tasks {
+		if t.Id == t.Id {
+			f.Tasks[i] = tNew
+			taskIndex = i
+			break
+		}
+	}
+	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks." + strconv.Itoa(taskIndex): tNew}})
+	if err != nil {
+		return Floor{}, err
+	}
+	if result.ModifiedCount == 0 {
+		return Floor{}, mongo.ErrNoDocuments
+	}
+	err = collection.FindOne(context.Background(), bson.M{"_id": f.Id}).Decode(&fUpdated)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
 }
