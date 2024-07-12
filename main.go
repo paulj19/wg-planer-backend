@@ -90,7 +90,7 @@ func main() {
 
 	http.HandleFunc("/floor/", curdFloor)
 	http.HandleFunc("/post-login", startupInfo)
-	http.HandleFunc("/task-update", services.taskService.HandleTaskUpdate)
+	http.HandleFunc("/update-task", services.taskService.HandleTaskUpdate)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")
@@ -102,17 +102,18 @@ func initAuthService(as AuthService) {
 }
 
 func startupInfo(w http.ResponseWriter, r *http.Request) {
-	corsHandler(w)
-	authToken := r.Header.Get("Authorization")
-	if authToken == "" {
-		http.Error(w, "No token provided", http.StatusUnauthorized)
-	}
-	authToken = authToken[7:]
-	floorId, err := authService.verifyToken(authToken)
-	if err != nil {
-		return
-	}
+	// corsHandler(w)
+	// authToken := r.Header.Get("Authorization")
+	// if authToken == "" {
+	// 	http.Error(w, "No token provided", http.StatusUnauthorized)
+	// }
+	// authToken = authToken[7:]
+	// floorId, err := authService.verifyToken(authToken)
+	// if err != nil {
+	// 	return
+	// }
 
+	floorId := "669158193879e0439b093db1"
 	floor, err := getFloor(floorId)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -122,11 +123,20 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	userprofile, err := authService.getUserProfile(authToken)
-	if err != nil {
-		http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
-		return
+
+	userprofile := UserProfile{
+		Id:         1,
+		Username:   "Paulo",
+		Email:      "maxmuster@gmail.com",
+		FloorId:    "66603e2a00afb9bb44b3cadb",
+		Oid:        1,
+		AuthServer: "HOME_BREW",
 	}
+	// userprofile, err := authService.getUserProfile(authToken)
+	// if err != nil {
+	// 	http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
 	if userprofile == (UserProfile{}) {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return

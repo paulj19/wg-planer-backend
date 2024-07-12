@@ -5,7 +5,7 @@ curl -v 'http://localhost:8080/floor/' \
   "Tasks": [
     {
       "Id": "0",
-      "Name": "Küche reinigen",
+      "Name": "Küchex reinigen",
       "AssignedTo": 0,
       "Reminders": 1,
       "AssignmentDate": "2024-06-13T14:48:00.000Z"
@@ -64,7 +64,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "2",
         "Name": "Leona Musterman",
-        "Available": false
+        "Available": true
       }
     },
     {
@@ -74,7 +74,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "3",
         "Name": "Evelyn Weber",
-        "Available": false
+        "Available": true
       }
     },
     {
@@ -84,7 +84,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "4",
         "Name": "Nodir Shirinov",
-        "Available": false
+        "Available": true
       }
     },
     {
@@ -104,7 +104,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "6",
         "Name": "Abdul Majeed Nethyahu",
-        "Available": false
+        "Available": true
       }
     },
     {
