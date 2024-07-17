@@ -84,7 +84,7 @@ func Test_nextAssignee(t *testing.T) {
 		}
 		nextRoom, err := nextAssignee(f, f.Tasks[0])
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		if nextRoom.Id != 2 {
 			t.Errorf("next assignee not found: got %v want %v", nextRoom.Id, f.Tasks[0].AssignedTo)
@@ -131,7 +131,7 @@ func Test_nextAssignee(t *testing.T) {
 		}
 		nextRoom, err := nextAssignee(f, f.Tasks[0])
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		if nextRoom.Id != 4 {
 			t.Errorf("next assignee not found: got %v want %v", nextRoom.Id, f.Tasks[1].AssignedTo)
@@ -209,7 +209,7 @@ func Test_nextAssignee(t *testing.T) {
 func Test_updateTask(t *testing.T) {
 	f, err := insertTestFloor(FloorStub)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 	t.Run("should assign task", func(t *testing.T) {
 		tuStub := TaskUpdate{
@@ -221,7 +221,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -229,7 +229,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -237,7 +237,7 @@ func Test_updateTask(t *testing.T) {
 		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
 
 		if updatedFloor.Tasks[0].AssignedTo != FloorStub.Rooms[3].Id {
-			t.Fatalf("task not assigned: got %v want %v", updatedFloor.Tasks[0].AssignedTo, FloorStub.Rooms[2].Id)
+			t.Errorf("task not assigned: got %v want %v", updatedFloor.Tasks[0].AssignedTo, FloorStub.Rooms[2].Id)
 		}
 	})
 
@@ -252,7 +252,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -260,7 +260,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusUnprocessableEntity {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusUnprocessableEntity)
 		}
 	})
@@ -274,7 +274,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -282,12 +282,45 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusUnprocessableEntity {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusUnprocessableEntity)
 		}
 	})
 
-	t.Run("should reassign done task", func(t *testing.T) {
+	t.Run("should UNASSIGN task", func(t *testing.T) {
+		f, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := TaskUpdate{
+			FloorId: f.Id.String()[10:34],
+			Task:    FloorStub.Tasks[0],
+			Action:  "UNASSIGN",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		services := services{taskService: TaskUpdate{}}
+		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		if updatedFloor.Tasks[0].AssignedTo != -1 {
+			t.Errorf("task not assigned correctly: got %v want %v", updatedFloor.Tasks[0].AssignedTo, -1)
+		}
+	})
+
+	t.Run("should reassign task DONE", func(t *testing.T) {
 		var floorStub = `{
   		"FloorName": "Awesome floor",
   		"Tasks": [
@@ -325,11 +358,11 @@ func Test_updateTask(t *testing.T) {
 `
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		floorsCreated = append(floorsCreated, f.Id)
 		tuStub := TaskUpdate{
@@ -340,7 +373,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -348,7 +381,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -407,11 +440,11 @@ func Test_updateTask(t *testing.T) {
 `
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		tuStub := TaskUpdate{
 			FloorId: f.Id.String()[10:34],
@@ -421,7 +454,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -429,7 +462,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -489,11 +522,11 @@ func Test_updateTask(t *testing.T) {
 `
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		tuStub := TaskUpdate{
 			FloorId: f.Id.String()[10:34],
@@ -503,7 +536,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -511,7 +544,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -547,15 +580,14 @@ func Test_updateTask(t *testing.T) {
   		    }
   		  }
   		]
-}
-`
+}`
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		tuStub := TaskUpdate{
 			FloorId: f.Id.String()[10:34],
@@ -565,7 +597,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -573,7 +605,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -633,11 +665,11 @@ func Test_updateTask(t *testing.T) {
 `
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		tuStub := TaskUpdate{
 			FloorId: f.Id.String()[10:34],
@@ -647,7 +679,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -655,7 +687,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 
@@ -731,15 +763,14 @@ func Test_updateTask(t *testing.T) {
     		  }
 				}
   		]
-}
-`
+}`
 		err := json.Unmarshal([]byte(floorStub), &FloorStub)
 		if err != nil {
-			t.Fatal("TestSetUp could not unmarshal FloorStub ", err)
+			t.Error("TestSetUp could not unmarshal FloorStub ", err)
 		}
 		f, err := insertTestFloor(FloorStub)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		tuStub := TaskUpdate{
 			FloorId: f.Id.String()[10:34],
@@ -749,7 +780,7 @@ func Test_updateTask(t *testing.T) {
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(tuStubStr))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
@@ -757,7 +788,7 @@ func Test_updateTask(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
-			t.Fatalf("handler returned wrong status code: got %v want %v",
+			t.Errorf("handler returned wrong status code: got %v want %v",
 				status, http.StatusOK)
 		}
 

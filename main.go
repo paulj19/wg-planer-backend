@@ -102,7 +102,7 @@ func initAuthService(as AuthService) {
 }
 
 func startupInfo(w http.ResponseWriter, r *http.Request) {
-	// corsHandler(w)
+	corsHandler(w)
 	// authToken := r.Header.Get("Authorization")
 	// if authToken == "" {
 	// 	http.Error(w, "No token provided", http.StatusUnauthorized)

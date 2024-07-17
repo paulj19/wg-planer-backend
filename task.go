@@ -21,6 +21,85 @@ type TaskUpdate struct {
 	NextRoom Room   `json:"nextRoom"`
 }
 
+func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	var taskUpdate TaskUpdate
+	err := json.NewDecoder(r.Body).Decode(&taskUpdate)
+	if err != nil {
+		logger.Error("taskUpdate decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	floor, err := getFloor(taskUpdate.FloorId)
+	if err != nil {
+		logger.Error("taskUpdate getFloor", slog.Any("error", err), slog.Any("taskToUpdate", taskUpdate.Task))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	taskIndex, err := findTaskIndex(floor.Tasks, taskUpdate.Task.Id)
+	fmt.Println("TASK INDEX", taskIndex)
+	if err != nil {
+		logger.Error("taskUpdate findTaskIndex", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	isConsistent, err := checkConsistency(floor, taskUpdate, taskIndex)
+
+	if err != nil || !isConsistent {
+		logger.Error("taskUpdate checkConsistency", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	nextRoom := taskUpdate.NextRoom
+	if taskUpdate.Action == "DONE" {
+		nextRoom, err = nextAssignee(floor, taskUpdate.Task)
+		if err != nil {
+			logger.Error("taskUpdate nextAssignee", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+			if err.Error() == "No next assignee available" {
+				unassignTask(&floor, taskIndex)
+				floor, err := updateTask(floor, taskIndex)
+				if err != nil {
+					logger.Error("taskUpdate updating DB", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(floor)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(floor)
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	} else if taskUpdate.Action == "UNASSIGN" {
+		unassignTask(&floor, taskIndex)
+		floor, err := updateTask(floor, taskIndex)
+		if err != nil {
+			logger.Error("taskUpdate updating DB", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(floor)
+		return
+	}
+
+	assignTask(&floor, taskIndex, nextRoom)
+	floor, err = updateTask(floor, taskIndex)
+	if err != nil {
+		logger.Error("taskUpdate updating DB", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(floor)
+}
+
 // TODO replace with ok
 func findTask(tasks []Task, taskID string) (Task, error) {
 	for _, t := range tasks {
@@ -29,6 +108,15 @@ func findTask(tasks []Task, taskID string) (Task, error) {
 		}
 	}
 	return Task{}, fmt.Errorf("Task not found")
+}
+
+func findTaskIndex(tasks []Task, taskID string) (int, error) {
+	for i, t := range tasks {
+		if t.Id == taskID {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("Task not found")
 }
 
 func findRoom(rooms []Room, roomID int64) (Room, error) {
@@ -40,10 +128,12 @@ func findRoom(rooms []Room, roomID int64) (Room, error) {
 	return Room{}, fmt.Errorf("Room not found")
 }
 
-func checkConsistency(f Floor, tu TaskUpdate) (bool, error) {
-	taskFromDB, err := findTask(f.Tasks, tu.Task.Id)
-	if err != nil {
-		return false, fmt.Errorf("check consistency Error finding task. %w", err)
+func checkConsistency(f Floor, tu TaskUpdate, taskIndex int) (bool, error) {
+	if f.Tasks[taskIndex].AssignedTo != tu.Task.AssignedTo {
+		return false, fmt.Errorf("Task assignee changed in between")
+	}
+	if tu.Action == "DONE" || tu.Action == "UNASSIGN" {
+		return true, nil
 	}
 
 	var roomToAssign Room
@@ -57,13 +147,6 @@ func checkConsistency(f Floor, tu TaskUpdate) (bool, error) {
 	}
 	if !roomFound {
 		return false, fmt.Errorf("Room not found.")
-	}
-
-	if taskFromDB.AssignedTo != tu.Task.AssignedTo {
-		return false, fmt.Errorf("Task assignee changed in between")
-	}
-	if tu.Action == "DONE" {
-		return true, nil
 	}
 
 	//check if assignee set to unavailable after user clicked, UI will show only avail residents
@@ -90,8 +173,6 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 	nextAss := currentRoom
 	for {
 		nextOrder := (nextAss.Order + 1) % len(f.Rooms)
-		fmt.Println("NEXT O", nextOrder)
-		fmt.Println("NEXT ASS", nextAss)
 		for _, r := range f.Rooms {
 			if r.Order == nextOrder {
 				nextAss = r
@@ -101,7 +182,6 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 		if nextAss.Id == currentRoom.Id { //looped through all rooms => break from inf. loop
 			break
 		}
-		fmt.Println("NEXT III", nextAss, "availa", nextAss.Resident.Available)
 		if nextAss.Resident.Available == true {
 			break
 		}
@@ -113,66 +193,14 @@ func nextAssignee(f Floor, t Task) (Room, error) {
 	return nextAss, nil
 }
 
-func assignTask(t Task, r Room) Task {
-	fmt.Println("Assigning", r.Id)
-	t.AssignedTo = r.Id
-	t.AssignmentDate = time.Now()
-	t.Reminders = 0
-	fmt.Println("task after ass", t)
-	return t
+func unassignTask(f *Floor, taskIndex int) {
+	f.Tasks[taskIndex].AssignedTo = -1
+	f.Tasks[taskIndex].AssignmentDate = time.Now()
+	f.Tasks[taskIndex].Reminders = 0
 }
 
-func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
-	var taskUpdate TaskUpdate
-	err := json.NewDecoder(r.Body).Decode(&taskUpdate)
-	if err != nil {
-		logger.Error("taskUpdate decoding data payload", slog.Any("error", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	floor, err := getFloor(taskUpdate.FloorId)
-	if err != nil {
-		logger.Error("taskUpdate getFloor", slog.Any("error", err), slog.Any("taskToUpdate", taskUpdate.Task))
-		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
-			return
-		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-
-	isConsistent, err := checkConsistency(floor, taskUpdate)
-
-	if err != nil || !isConsistent {
-		logger.Error("taskUpdate checkConsistency", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-
-	nextRoom := taskUpdate.NextRoom
-	if taskUpdate.Action == "DONE" {
-		nextRoom, err = nextAssignee(floor, taskUpdate.Task)
-		fmt.Println("NEXT ROOM", nextRoom)
-		if err != nil {
-			logger.Error("taskUpdate nextAssignee", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
-			if err.Error() == "No next assignee available" {
-				taskUpdate.Task.AssignedTo = -1
-				taskUpdate.Task.AssignmentDate = time.Now()
-				taskUpdate.Task.Reminders = 0
-				updateDB(floor, taskUpdate.Task)
-				json.NewEncoder(w).Encode(floor)
-				return
-			}
-			json.NewEncoder(w).Encode(floor)
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
-		}
-	}
-
-	floor, err = updateDB(floor, assignTask(taskUpdate.Task, nextRoom))
-	if err != nil {
-		logger.Error("taskUpdate updating DB", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	json.NewEncoder(w).Encode(floor)
+func assignTask(f *Floor, taskIndex int, r Room) {
+	f.Tasks[taskIndex].AssignedTo = r.Id
+	f.Tasks[taskIndex].AssignmentDate = time.Now()
+	f.Tasks[taskIndex].Reminders = 0
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strconv"
 
@@ -42,10 +43,9 @@ func disconnectMongo(ctx context.Context) {
 }
 
 func insertNewFloor(floor Floor) (Floor, error) {
-	log.Println("adding new floor: ", floor)
 	res, err := collection.InsertOne(context.Background(), floor)
 	if err != nil {
-		log.Fatal(err)
+		return Floor{}, err
 	}
 	// insertedID, ok := res.InsertedID.(primitive.ObjectID)
 	// if !ok {
@@ -55,8 +55,9 @@ func insertNewFloor(floor Floor) (Floor, error) {
 	var newFloor Floor
 	err = collection.FindOne(context.Background(), bson.M{"_id": res.InsertedID}).Decode(&newFloor)
 	if err != nil {
-		panic(err)
+		return Floor{}, fmt.Errorf("newly inserted floor could not be retrieved %w", err)
 	}
+	log.Println("added new floor: ", newFloor)
 	return newFloor, nil
 }
 
@@ -80,17 +81,9 @@ func deleteTestFloors(fIds []primitive.ObjectID) {
 	}
 }
 
-func updateDB(f Floor, tNew Task) (Floor, error) {
-	var taskIndex int
+func updateTask(f Floor, taskIndex int) (Floor, error) {
 	var fUpdated Floor
-	for i, t := range f.Tasks {
-		if t.Id == tNew.Id {
-			f.Tasks[i] = tNew
-			taskIndex = i
-			break
-		}
-	}
-	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks." + strconv.Itoa(taskIndex): tNew}})
+	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks." + strconv.Itoa(taskIndex): f.Tasks[taskIndex]}})
 	if err != nil {
 		return Floor{}, err
 	}
