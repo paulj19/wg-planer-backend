@@ -54,7 +54,8 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "1",
         "Name": "Max Musterman",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
       }
     },
     {
@@ -64,7 +65,8 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "2",
         "Name": "Leona Musterman",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
       }
     },
     {
@@ -73,8 +75,9 @@ curl -v 'http://localhost:8080/floor/' \
       "Order": 2,
       "Resident": {
         "Id": "3",
-        "Name": "Evelyn Weber",
-        "Available": true
+        "Name": "Donald Trump",
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
       }
     },
     {
@@ -84,7 +87,8 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "4",
         "Name": "Nodir Shirinov",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
       }
     },
     {
@@ -94,7 +98,8 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "5",
         "Name": "Benjamin Renert",
-        "Available": false
+        "Available": false,
+        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
       }
     },
     {
@@ -104,7 +109,8 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "6",
         "Name": "Abdul Majeed Nethyahu",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
       }
     },
     {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -23,6 +24,9 @@ type TaskUpdate struct {
 
 func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
 	var taskUpdate TaskUpdate
 	err := json.NewDecoder(r.Body).Decode(&taskUpdate)
 	if err != nil {
@@ -39,7 +43,6 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	taskIndex, err := findTaskIndex(floor.Tasks, taskUpdate.Task.Id)
-	fmt.Println("TASK INDEX", taskIndex)
 	if err != nil {
 		logger.Error("taskUpdate findTaskIndex", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -96,8 +99,21 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(floor)
+
+	//send notification with retry
+	for i := 0; i < 3; i++ {
+		err = sendNotification(nextRoom, floor.Tasks[taskIndex], floor.Id.String(), taskUpdate.Action)
+		if err != nil {
+			logger.Error("taskUpdate sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+		} else {
+			break
+		}
+		waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
+		time.Sleep(waitTime)
+	}
 }
 
 // TODO replace with ok

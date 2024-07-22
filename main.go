@@ -44,9 +44,10 @@ type Room struct {
 }
 
 type Resident struct {
-	Id        string `bson:"id"`
-	Name      string `bson:"name"`
-	Available bool   `bson:"available"`
+	Id            string `bson:"id"`
+	Name          string `bson:"name"`
+	Available     bool   `bson:"available"`
+	ExpoPushToken string `bson:"expoPushToken"`
 }
 
 type UserProfile struct {
@@ -113,7 +114,7 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	floorId := "669158193879e0439b093db1"
+	floorId := "669de29374fc6caa59d91678"
 	floor, err := getFloor(floorId)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
