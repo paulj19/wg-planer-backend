@@ -54,8 +54,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "1",
         "Name": "Max Musterman",
-        "Available": true,
-        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
+        "Available": true
       }
     },
     {
@@ -65,8 +64,7 @@ curl -v 'http://localhost:8080/floor/' \
       "Resident": {
         "Id": "2",
         "Name": "Leona Musterman",
-        "Available": true,
-        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
+        "Available": true
       }
     },
     {

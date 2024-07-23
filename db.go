@@ -81,8 +81,16 @@ func deleteTestFloors(fIds []primitive.ObjectID) {
 	}
 }
 
+func getUpdatedFloor(fId primitive.ObjectID) (Floor, error) {
+	var f Floor
+	err := collection.FindOne(context.Background(), bson.M{"_id": fId}).Decode(&f)
+	if err != nil {
+		return Floor{}, err
+	}
+	return f, nil
+}
+
 func updateTask(f Floor, taskIndex int) (Floor, error) {
-	var fUpdated Floor
 	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks." + strconv.Itoa(taskIndex): f.Tasks[taskIndex]}})
 	if err != nil {
 		return Floor{}, err
@@ -90,9 +98,24 @@ func updateTask(f Floor, taskIndex int) (Floor, error) {
 	if result.ModifiedCount == 0 {
 		return Floor{}, mongo.ErrNoDocuments
 	}
-	err = collection.FindOne(context.Background(), bson.M{"_id": f.Id}).Decode(&fUpdated)
+	fUpdated, err := getUpdatedFloor(f.Id)
 	if err != nil {
 		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func updateExpoPushToken(f Floor, roomIndex int) (Floor, error) {
+	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"rooms." + strconv.Itoa(roomIndex): f.Rooms[roomIndex]}})
+	if err != nil {
+		return Floor{}, fmt.Errorf("error updating expo push token in DB %w", err)
+	}
+	if result.ModifiedCount == 0 {
+		return Floor{}, fmt.Errorf("error updating expo push token in DB, no documents modified")
+	}
+	fUpdated, err := getUpdatedFloor(f.Id)
+	if err != nil {
+		return Floor{}, fmt.Errorf("error getting updated floor from DB %w", err)
 	}
 	return fUpdated, nil
 }

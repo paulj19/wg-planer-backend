@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -297,3 +300,36 @@ func TestMain(m *testing.M) {
 // 	args := as.Called(r)
 // 	return args.String(0), args.String(1), args.Error(2)
 // }
+
+func Test_RegisterExpoToken(t *testing.T) {
+	f, err := insertTestFloor(FloorStub)
+	if err != nil {
+		t.Error(err)
+	}
+	regExpoToken := &RegisterTokenRequest{
+		ExpoPushToken: "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]",
+		FloorId:       f.Id.String()[10:34],
+		UserId:        "1",
+	}
+	regExpTokenJson, err := json.Marshal(regExpoToken)
+	req, err := http.NewRequest("POST", "/task-update", bytes.NewReader(regExpTokenJson))
+	if err != nil {
+		t.Error(err)
+	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(registerExpoPushToken)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	var updatedFloor Floor
+	json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+	if updatedFloor.Rooms[0].Resident.ExpoPushToken != "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]" {
+		t.Errorf("handler returned wrong body: got %v want %v", updatedFloor.Rooms[0].Resident.ExpoPushToken, "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]")
+	}
+
+}

@@ -64,6 +64,12 @@ type GetFloorResponse struct {
 	UserProfile UserProfile `json:"userprofile"`
 }
 
+type RegisterTokenRequest struct {
+	ExpoPushToken string `json:"expoPushToken"`
+	FloorId       string `json:"floorId"`
+	UserId        string `json:"userId"`
+}
+
 // type Resident struct {
 //   Name       string `bson:"name"`
 //   AssignedTo string `bson:"assignedTo"`
@@ -92,6 +98,7 @@ func main() {
 	http.HandleFunc("/floor/", curdFloor)
 	http.HandleFunc("/post-login", startupInfo)
 	http.HandleFunc("/update-task", services.taskService.HandleTaskUpdate)
+	http.HandleFunc("/register-expo-token", registerExpoPushToken)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")
@@ -114,7 +121,7 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	floorId := "669de29374fc6caa59d91678"
+	floorId := "669fca69d244526d709f6d76"
 	floor, err := getFloor(floorId)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -126,7 +133,7 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userprofile := UserProfile{
-		Id:         1,
+		Id:         2,
 		Username:   "Paulo",
 		Email:      "maxmuster@gmail.com",
 		FloorId:    "66603e2a00afb9bb44b3cadb",
@@ -183,6 +190,47 @@ func curdFloor(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	var registerTokenRequest RegisterTokenRequest
+	err := json.NewDecoder(r.Body).Decode(&registerTokenRequest)
+	if err != nil {
+		logger.Error("registerTokenRequest", slog.Any("error", err))
+		http.Error(w, fmt.Sprintf("Error reading request body %v", err), http.StatusBadRequest)
+		return
+	}
+	floor, err := getFloor(registerTokenRequest.FloorId)
+	if err != nil {
+		logger.Error("registerTokenRequest getFloor", slog.Any("error", err), slog.Any("registerTokenRequest", registerTokenRequest))
+		http.Error(w, "Error getting floor", http.StatusUnprocessableEntity)
+		return
+	}
+	var found bool
+	var roomIndex int
+	for i, room := range floor.Rooms {
+		if room.Resident.Id == registerTokenRequest.UserId {
+			floor.Rooms[i].Resident.ExpoPushToken = registerTokenRequest.ExpoPushToken
+			roomIndex = i
+			found = true
+			break
+		}
+
+	}
+	if !found {
+		logger.Error("registerTokenRequest", slog.Any("error", "User not found in floor"), slog.Any("registerTokenRequest", registerTokenRequest), slog.Any("floor", floor))
+		http.Error(w, "User not found in floor", http.StatusUnprocessableEntity)
+		return
+	}
+	floor, err = updateExpoPushToken(floor, roomIndex)
+	if err != nil {
+		logger.Error("registerTokenRequest", slog.Any("error", err), slog.Any("registerTokenRequest", registerTokenRequest), slog.Any("floor", floor))
+		http.Error(w, "Error updating expo push token in DB", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(floor)
 }
 
 func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
