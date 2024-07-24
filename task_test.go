@@ -801,6 +801,41 @@ func Test_updateTask(t *testing.T) {
 	})
 }
 
+func Test_remindTask(t *testing.T) {
+	t.Run("should remind task", func(t *testing.T) {
+		f, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := TaskUpdate{
+			FloorId: f.Id.String()[10:34],
+			Task:    FloorStub.Tasks[0],
+			Action:  "REMIND",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/remind-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		services := services{taskService: TaskUpdate{}}
+		handler := http.HandlerFunc(services.taskService.HandleRemindTask)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		if updatedFloor.Tasks[0].Reminders != 2 {
+			t.Errorf("task not reminded: got %v want %v", updatedFloor.Tasks[0].Reminders, 2)
+		}
+	})
+}
+
 func insertTestFloor(f Floor) (Floor, error) {
 	floor, err := insertNewFloor(f)
 	if err != nil {

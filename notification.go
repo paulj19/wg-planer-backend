@@ -8,7 +8,7 @@ import (
 	expo "github.com/oliveroneill/exponent-server-sdk-golang/sdk"
 )
 
-func sendNotification(r Room, t Task, fId string, nType string) error {
+func sendNotification(r Room, t Task, fId string, nType string, title string) error {
 	pushToken, err := expo.NewExponentPushToken(r.Resident.ExpoPushToken)
 	if err != nil {
 		return fmt.Errorf("error creating push token from %s: %w", r.Resident.ExpoPushToken, err)
@@ -31,7 +31,7 @@ func sendNotification(r Room, t Task, fId string, nType string) error {
 		Body:     "",
 		Data:     m,
 		Sound:    "default",
-		Title:    fmt.Sprintf("%s has been assigned to you!", t.Name),
+		Title:    title,
 		Priority: expo.DefaultPriority,
 	}
 

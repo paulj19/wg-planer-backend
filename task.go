@@ -13,6 +13,7 @@ import (
 
 type TaskService interface {
 	HandleTaskUpdate(w http.ResponseWriter, r *http.Request)
+	HandleRemindTask(w http.ResponseWriter, r *http.Request)
 }
 
 type TaskUpdate struct {
@@ -105,9 +106,67 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 
 	//send notification with retry
 	for i := 0; i < 3; i++ {
-		err = sendNotification(nextRoom, floor.Tasks[taskIndex], floor.Id.String(), taskUpdate.Action)
+		err = sendNotification(nextRoom, floor.Tasks[taskIndex], floor.Id.String(), taskUpdate.Action, fmt.Sprintf("%s has been assigned to you!", taskUpdate.Task.Name))
 		if err != nil {
 			logger.Error("taskUpdate sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate.Task))
+		} else {
+			break
+		}
+		waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
+		time.Sleep(waitTime)
+	}
+}
+
+func (s TaskUpdate) HandleRemindTask(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	var tu TaskUpdate
+	err := json.NewDecoder(r.Body).Decode(&tu)
+	if err != nil {
+		logger.Error("remindTask decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	f, err := getFloor(tu.FloorId)
+	if err != nil {
+		logger.Error("taskRemind getFloor", slog.Any("error", err), slog.Any("taskToRemind", tu.Task))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	taskIndex, err := findTaskIndex(f.Tasks, tu.Task.Id)
+	if err != nil {
+		logger.Error("taskRemind findTaskIndex", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	if f.Tasks[taskIndex].AssignedTo != tu.Task.AssignedTo {
+		logger.Error("taskRemind checkConsistency", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
+		http.Error(w, "Task assignee changed in between", http.StatusUnprocessableEntity)
+		return
+	}
+
+	f.Tasks[taskIndex].Reminders += 1
+
+	f, err = updateTask(f, taskIndex)
+	if err != nil {
+		logger.Error("taskRemind updating DB", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(f)
+
+	//send notification with retry
+	fmt.Println("XXX", f.Rooms[taskIndex], tu)
+	for i := 0; i < 3; i++ {
+		err = sendNotification(f.Rooms[taskIndex], f.Tasks[taskIndex], f.Id.String(), "REMINDER", fmt.Sprintf("You have been remined about %s!", f.Tasks[taskIndex].Name))
+		if err != nil {
+			logger.Error("taskRemind sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		} else {
 			break
 		}
