@@ -90,8 +90,23 @@ func getUpdatedFloor(fId primitive.ObjectID) (Floor, error) {
 	return f, nil
 }
 
-func updateTask(f Floor, taskIndex int) (Floor, error) {
-	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks." + strconv.Itoa(taskIndex): f.Tasks[taskIndex]}})
+func updateTasks(f Floor) (Floor, error) {
+	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"tasks": f.Tasks}})
+	if err != nil {
+		return Floor{}, err
+	}
+	if result.ModifiedCount == 0 {
+		return Floor{}, mongo.ErrNoDocuments
+	}
+	fUpdated, err := getUpdatedFloor(f.Id)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func updateRoom(f Floor, roomIndex int) (Floor, error) {
+	result, err := collection.UpdateOne(context.Background(), bson.M{"_id": f.Id}, bson.M{"$set": bson.M{"rooms." + strconv.Itoa(roomIndex): f.Rooms[roomIndex]}})
 	if err != nil {
 		return Floor{}, err
 	}

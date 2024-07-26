@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -819,7 +820,7 @@ func Test_remindTask(t *testing.T) {
 		}
 		rr := httptest.NewRecorder()
 		services := services{taskService: TaskUpdate{}}
-		handler := http.HandlerFunc(services.taskService.HandleRemindTask)
+		handler := http.HandlerFunc(services.taskService.HandleTaskRemind)
 		handler.ServeHTTP(rr, req)
 
 		if status := rr.Code; status != http.StatusOK {
@@ -832,6 +833,89 @@ func Test_remindTask(t *testing.T) {
 
 		if updatedFloor.Tasks[0].Reminders != 2 {
 			t.Errorf("task not reminded: got %v want %v", updatedFloor.Tasks[0].Reminders, 2)
+		}
+	})
+}
+
+func Test_residentUnavailable(t *testing.T) {
+	t.Run("should pass all tasks of RESIDENT_UNAVAILABLE", func(t *testing.T) {
+		f, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := TaskUpdate{
+			FloorId: f.Id.String()[10:34],
+			Action:  "RESIDENT_UNAVAILABLE",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/update-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		services := services{taskService: TaskUpdate{}}
+		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+		fmt.Println("XXX", updatedFloor)
+
+		if updatedFloor.Rooms[1].Resident.Available != false {
+			t.Errorf("resident not unavailable: got %v want %v", updatedFloor.Rooms[0].Resident.Available, false)
+		}
+		for i := 1; i < len(updatedFloor.Tasks); i++ {
+			if updatedFloor.Tasks[i].AssignedTo != 3 {
+				t.Errorf("task not assigned correctly: got %v want %v", updatedFloor.Tasks[i].AssignedTo, 2)
+			}
+		}
+	})
+	t.Run("should unassign all tasks RESIDENT_UNAVAILABLE", func(t *testing.T) {
+		for i := 0; i < len(FloorStub.Rooms); i++ {
+			if FloorStub.Rooms[i].Id != 1 {
+				FloorStub.Rooms[i].Resident.Available = false
+			}
+		}
+		f, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+
+		tuStub := TaskUpdate{
+			FloorId: f.Id.String()[10:34],
+			Action:  "RESIDENT_UNAVAILABLE",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/update-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		services := services{taskService: TaskUpdate{}}
+		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+		fmt.Println("XXX", updatedFloor)
+
+		if updatedFloor.Rooms[1].Resident.Available != false {
+			t.Errorf("resident not unavailable: got %v want %v", updatedFloor.Rooms[0].Resident.Available, false)
+		}
+		for i := 1; i < len(updatedFloor.Tasks); i++ {
+			if updatedFloor.Tasks[i].AssignedTo != -1 {
+				t.Errorf("task not assigned correctly: got %v want %v", updatedFloor.Tasks[i].AssignedTo, -1)
+			}
 		}
 	})
 }
