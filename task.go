@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -44,16 +45,15 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	err = processUpdate(&floor, taskUpdate)
+	floor, err = processTaskUpdate(&floor, taskUpdate)
 	if err != nil {
+		if strings.HasPrefix(err.Error(), "taskUpdate updating DB tasks:") {
+			logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskUpdate", taskUpdate))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		logger.Error("taskUpdate processUpdate", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-	floor, err = updateTasks(floor)
-	if err != nil {
-		logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -149,7 +149,7 @@ func (s TaskUpdate) HandleTaskRemind(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func processUpdate(floor *Floor, tu TaskUpdate) error {
+func processTaskUpdate(floor *Floor, tu TaskUpdate) (Floor, error) {
 	var tasksToUpdate []Task
 	if tu.Action == "RESIDENT_UNAVAILABLE" {
 		userId := int64(1)
@@ -165,19 +165,19 @@ func processUpdate(floor *Floor, tu TaskUpdate) error {
 	}
 
 	if len(tasksToUpdate) == 0 {
-		return nil
+		return Floor{}, nil
 	}
 
 	for _, t := range tasksToUpdate {
 		taskIndex, err := findTaskIndex(floor.Tasks, t.Id)
 		if err != nil {
-			return fmt.Errorf("taskUpdate findTaskIndex: %w", err)
+			return Floor{}, fmt.Errorf("taskUpdate findTaskIndex: %w", err)
 		}
 
 		if tu.Action != "RESIDENT_UNAVAILABLE" {
 			isConsistent, err := checkConsistency(*floor, tu, taskIndex)
 			if err != nil || !isConsistent {
-				return fmt.Errorf("taskUpdate checkConsistency: %w", err)
+				return Floor{}, fmt.Errorf("taskUpdate checkConsistency: %w", err)
 			}
 		}
 
@@ -189,7 +189,7 @@ func processUpdate(floor *Floor, tu TaskUpdate) error {
 					unassignTask(floor, taskIndex)
 					continue
 				}
-				return fmt.Errorf("taskUpdate nextAssignee: %w", err)
+				return Floor{}, fmt.Errorf("taskUpdate nextAssignee: %w", err)
 			}
 			assignTask(floor, taskIndex, nextRoom)
 		} else if tu.Action == "UNASSIGN" {
@@ -198,8 +198,12 @@ func processUpdate(floor *Floor, tu TaskUpdate) error {
 			assignTask(floor, taskIndex, nextRoom)
 		}
 	}
+	fUp, err := updateTasks(*floor)
+	if err != nil {
+		return Floor{}, fmt.Errorf("taskUpdate updating DB tasks: %w", err)
+	}
 
-	return nil
+	return fUp, nil
 }
 
 // TODO replace with ok
