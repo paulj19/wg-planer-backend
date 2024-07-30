@@ -87,7 +87,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
-	services := services{taskService: TaskUpdate{}}
+	services := services{taskService: TaskUpdateRequest{}}
 	// pubKey, err := initAuthServerPubKey()
 	// if err != nil {
 	// 	log.Fatal("Error initing public key", err)

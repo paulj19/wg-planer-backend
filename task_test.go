@@ -212,7 +212,7 @@ func Test_updateTask(t *testing.T) {
 		t.Error(err)
 	}
 	t.Run("should assign task", func(t *testing.T) {
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId:  f.Id.String()[10:34],
 			Task:     FloorStub.Tasks[0],
 			Action:   "ASSIGN",
@@ -224,7 +224,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -243,7 +243,7 @@ func Test_updateTask(t *testing.T) {
 
 	t.Run("should 422 when resident unavailable after user click", func(t *testing.T) {
 		FloorStub.Rooms[3].Resident.Available = false
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId:  f.Id.String()[10:34],
 			Task:     FloorStub.Tasks[0],
 			Action:   "ASSIGN",
@@ -255,7 +255,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -265,7 +265,7 @@ func Test_updateTask(t *testing.T) {
 		}
 	})
 	t.Run("should return 422 due to ass unavail", func(t *testing.T) {
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId:  f.Id.String()[10:34],
 			Task:     FloorStub.Tasks[0],
 			Action:   "ASSIGN",
@@ -277,7 +277,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -292,7 +292,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "UNASSIGN",
@@ -303,7 +303,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -365,7 +365,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		floorsCreated = append(floorsCreated, f.Id)
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -376,7 +376,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -446,7 +446,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -457,7 +457,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -528,7 +528,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -539,7 +539,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -589,7 +589,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -600,7 +600,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -671,7 +671,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -682,7 +682,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -772,7 +772,7 @@ func Test_updateTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "DONE",
@@ -783,7 +783,7 @@ func Test_updateTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskUpdate)
 		handler.ServeHTTP(rr, req)
 
@@ -807,7 +807,7 @@ func Test_remindTask(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Task:    FloorStub.Tasks[0],
 			Action:  "REMIND",
@@ -818,7 +818,7 @@ func Test_remindTask(t *testing.T) {
 			t.Error(err)
 		}
 		rr := httptest.NewRecorder()
-		services := services{taskService: TaskUpdate{}}
+		services := services{taskService: TaskUpdateRequest{}}
 		handler := http.HandlerFunc(services.taskService.HandleTaskRemind)
 		handler.ServeHTTP(rr, req)
 
@@ -842,7 +842,7 @@ func Test_residentUnavailable(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Action:  "RESIDENT_UNAVAILABLE",
 		}
@@ -883,7 +883,7 @@ func Test_residentUnavailable(t *testing.T) {
 			t.Error(err)
 		}
 
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Action:  "RESIDENT_UNAVAILABLE",
 		}
@@ -920,7 +920,7 @@ func Test_residentUnavailable(t *testing.T) {
 			t.Error(err)
 		}
 
-		tuStub := TaskUpdate{
+		tuStub := TaskUpdateRequest{
 			FloorId: f.Id.String()[10:34],
 			Action:  "RESIDENT_AVAILABLE",
 		}

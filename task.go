@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -17,20 +18,25 @@ type TaskService interface {
 	HandleTaskRemind(w http.ResponseWriter, r *http.Request)
 }
 
-type TaskUpdate struct {
+type TaskUpdateRequest struct {
 	FloorId  string `json:"floorId"`
 	Task     Task   `json:"task"`
 	Action   string `json:"action"`
 	NextRoom Room   `json:"nextRoom"`
 }
 
-func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
-	var userId = "2"
+type TaskUpdateResult struct {
+	Floor        Floor  `json:"floor"`
+	TasksUpdated []Task `json:"tasksUpdated"`
+	RoomToNotify Room   `json:"roomToNotify"`
+}
+
+func (s TaskUpdateRequest) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
 	}
-	var taskUpdate TaskUpdate
+	var taskUpdate TaskUpdateRequest
 	err := json.NewDecoder(r.Body).Decode(&taskUpdate)
 	if err != nil {
 		logger.Error("taskUpdate decoding data payload", slog.Any("error", err))
@@ -45,56 +51,46 @@ func (s TaskUpdate) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	floor, err = processTaskUpdate(&floor, taskUpdate)
+	taskUpdateResult, err := processTaskUpdate(&floor, taskUpdate)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "taskUpdate updating DB tasks:") {
-			logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskUpdate", taskUpdate))
+			logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", taskUpdateResult.Floor), slog.Any("taskUpdate", taskUpdate))
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		logger.Error("taskUpdate processUpdate", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
+		logger.Error("taskUpdate processUpdate", slog.Any("error", err), slog.Any("floor", taskUpdateResult.Floor), slog.Any("taskToUpdate", taskUpdate))
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	if taskUpdate.Action == "RESIDENT_UNAVAILABLE" {
-		roomIndex, err := findRoom(floor.Rooms, userId)
-		fmt.Println("roomIndex", roomIndex)
-		if err != nil {
-			logger.Error("taskUpdate findRoom", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
-		}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(taskUpdateResult.Floor)
 
-		floor.Rooms[roomIndex].Resident.Available = false
-		floor, err = updateRoom(floor, roomIndex)
+	//todo pointer check
+	//todo make this in a gorouting aka async
+	if !reflect.DeepEqual(taskUpdateResult.RoomToNotify, Room{}) {
+		taskJSON, err := json.Marshal(taskUpdateResult.TasksUpdated)
 		if err != nil {
-			logger.Error("taskUpdate updating DB room", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
+			logger.Error("taskUpdate marshalling task to json", slog.Any("error", err))
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(floor)
-
-	//todo set the notification message of RESIDENT_UNAVAILABLE
-	//todo make this in a gorouting aka async
-	//send notification with retry
-	for i := 0; i < 3; i++ {
-		// err = sendNotification(nextRoom, floor.Tasks[taskIndex], floor.Id.String(), taskUpdate.Action, fmt.Sprintf("%s has been assigned to you!", taskUpdate.Task.Name))
-		if err != nil {
-			logger.Error("taskUpdate sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
-		} else {
-			break
+		for i := 0; i < 3; i++ {
+			err = sendNotification(taskUpdateResult.RoomToNotify, taskJSON, taskUpdateResult.Floor.Id.String()[10:len(taskUpdateResult.Floor.Id.String())-2], "TASK_"+taskUpdate.Action, fmt.Sprintf("%s has been assigned to you!", taskUpdateResult.TasksUpdated[0].Name))
+			if err != nil {
+				logger.Error("taskUpdate sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
+			} else {
+				break
+			}
+			waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
+			time.Sleep(waitTime)
 		}
-		waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
-		time.Sleep(waitTime)
 	}
 }
 
-func (s TaskUpdate) HandleTaskRemind(w http.ResponseWriter, r *http.Request) {
+func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
-	var tu TaskUpdate
+	var tu TaskUpdateRequest
 	err := json.NewDecoder(r.Body).Decode(&tu)
 	if err != nil {
 		logger.Error("remindTask decoding data payload", slog.Any("error", err))
@@ -136,9 +132,14 @@ func (s TaskUpdate) HandleTaskRemind(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(f)
 
-	//send notification with retry
+	taskJSON, err := json.Marshal(f.Tasks[taskIndex])
+	if err != nil {
+		logger.Error("taskUpdate marshalling task to json", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	for i := 0; i < 3; i++ {
-		// err = sendNotification(f.Rooms[taskIndex], f.Tasks[taskIndex], f.Id.String(), "REMINDER", fmt.Sprintf("You have been remined about %s!", f.Tasks[taskIndex].Name))
+		err = sendNotification(f.Rooms[taskIndex], taskJSON, f.Id.String()[10:len(f.Id.String())-2], "TASK_REMINDER", fmt.Sprintf("You have been remined about %s!", f.Tasks[taskIndex].Name))
 		if err != nil {
 			logger.Error("taskRemind sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		} else {
@@ -149,15 +150,13 @@ func (s TaskUpdate) HandleTaskRemind(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func processTaskUpdate(floor *Floor, tu TaskUpdate) (Floor, error) {
+func processTaskUpdate(floor *Floor, tu TaskUpdateRequest) (TaskUpdateResult, error) {
 	var tasksToUpdate []Task
 	if tu.Action == "RESIDENT_UNAVAILABLE" {
-		userId := int64(1)
-		if tu.Action == "RESIDENT_UNAVAILABLE" {
-			for _, t := range floor.Tasks {
-				if t.AssignedTo == userId {
-					tasksToUpdate = append(tasksToUpdate, t)
-				}
+		roomId := int64(0)
+		for _, t := range floor.Tasks {
+			if t.AssignedTo == roomId {
+				tasksToUpdate = append(tasksToUpdate, t)
 			}
 		}
 	} else {
@@ -165,23 +164,25 @@ func processTaskUpdate(floor *Floor, tu TaskUpdate) (Floor, error) {
 	}
 
 	if len(tasksToUpdate) == 0 {
-		return Floor{}, nil
+		return TaskUpdateResult{Floor: *floor}, nil
 	}
 
+	var nextRoom Room
+	var tasksUpdated []Task
 	for _, t := range tasksToUpdate {
 		taskIndex, err := findTaskIndex(floor.Tasks, t.Id)
 		if err != nil {
-			return Floor{}, fmt.Errorf("taskUpdate findTaskIndex: %w", err)
+			return TaskUpdateResult{}, fmt.Errorf("taskUpdate findTaskIndex: %w", err)
 		}
 
 		if tu.Action != "RESIDENT_UNAVAILABLE" {
 			isConsistent, err := checkConsistency(*floor, tu, taskIndex)
 			if err != nil || !isConsistent {
-				return Floor{}, fmt.Errorf("taskUpdate checkConsistency: %w", err)
+				return TaskUpdateResult{}, fmt.Errorf("taskUpdate checkConsistency: %w", err)
 			}
 		}
 
-		nextRoom := tu.NextRoom
+		nextRoom = tu.NextRoom
 		if tu.Action == "DONE" || tu.Action == "RESIDENT_UNAVAILABLE" {
 			nextRoom, err = nextAssignee(*floor, t)
 			if err != nil {
@@ -189,7 +190,7 @@ func processTaskUpdate(floor *Floor, tu TaskUpdate) (Floor, error) {
 					unassignTask(floor, taskIndex)
 					continue
 				}
-				return Floor{}, fmt.Errorf("taskUpdate nextAssignee: %w", err)
+				return TaskUpdateResult{}, fmt.Errorf("taskUpdate nextAssignee: %w", err)
 			}
 			assignTask(floor, taskIndex, nextRoom)
 		} else if tu.Action == "UNASSIGN" {
@@ -197,13 +198,14 @@ func processTaskUpdate(floor *Floor, tu TaskUpdate) (Floor, error) {
 		} else if tu.Action == "ASSIGN" {
 			assignTask(floor, taskIndex, nextRoom)
 		}
+		tasksUpdated = append(tasksUpdated, floor.Tasks[taskIndex])
 	}
 	fUp, err := updateTasks(*floor)
 	if err != nil {
-		return Floor{}, fmt.Errorf("taskUpdate updating DB tasks: %w", err)
+		return TaskUpdateResult{}, fmt.Errorf("taskUpdate updating DB tasks: %w", err)
 	}
 
-	return fUp, nil
+	return TaskUpdateResult{Floor: fUp, TasksUpdated: tasksUpdated, RoomToNotify: nextRoom}, nil
 }
 
 // TODO replace with ok
@@ -234,7 +236,7 @@ func findRoom(rooms []Room, userId string) (int, error) {
 	return -1, fmt.Errorf("Room not found")
 }
 
-func checkConsistency(f Floor, tu TaskUpdate, taskIndex int) (bool, error) {
+func checkConsistency(f Floor, tu TaskUpdateRequest, taskIndex int) (bool, error) {
 	if f.Tasks[taskIndex].AssignedTo != tu.Task.AssignedTo {
 		return false, fmt.Errorf("Task assignee changed in between")
 	}

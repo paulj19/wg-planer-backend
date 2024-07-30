@@ -17,7 +17,7 @@ var floorStub = `{
   "Tasks": [
     {
       "Id": "0",
-      "Name": "Küche reinigen",
+      "Name": "Küchex reinigen",
       "AssignedTo": 0,
       "Reminders": 1,
       "AssignmentDate": "2024-06-13T14:48:00.000Z"
@@ -85,8 +85,9 @@ var floorStub = `{
       "Order": 2,
       "Resident": {
         "Id": "3",
-        "Name": "Evelyn Weber",
-        "Available": false
+        "Name": "Donald Trump",
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
       }
     },
     {
@@ -96,7 +97,8 @@ var floorStub = `{
       "Resident": {
         "Id": "4",
         "Name": "Nodir Shirinov",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
       }
     },
     {
@@ -106,7 +108,8 @@ var floorStub = `{
       "Resident": {
         "Id": "5",
         "Name": "Benjamin Renert",
-        "Available": false
+        "Available": false,
+        "ExpoPushToken" : "ExponentPushToken[iSzbFwJHI9J81X3klu3AQ3]"
       }
     },
     {
@@ -116,7 +119,8 @@ var floorStub = `{
       "Resident": {
         "Id": "6",
         "Name": "Abdul Majeed Nethyahu",
-        "Available": true
+        "Available": true,
+        "ExpoPushToken" : "ExponentPushToken[CMWSpRDXr79n96TN9a43ei]"
       }
     },
     {

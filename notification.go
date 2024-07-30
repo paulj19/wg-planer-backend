@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"reflect"
 
 	expo "github.com/oliveroneill/exponent-server-sdk-golang/sdk"
 )
 
-func sendNotification(r Room, t Task, fId string, nType string, title string) error {
+func sendNotification(r Room, patch []byte, fId string, nType string, title string) error {
 	pushToken, err := expo.NewExponentPushToken(r.Resident.ExpoPushToken)
 	if err != nil {
 		return fmt.Errorf("error creating push token from %s: %w", r.Resident.ExpoPushToken, err)
@@ -16,15 +14,11 @@ func sendNotification(r Room, t Task, fId string, nType string, title string) er
 
 	client := expo.NewPushClient(nil)
 
-	var m map[string]string = make(map[string]string, reflect.ValueOf(t).NumField())
+	var m map[string]string = make(map[string]string)
 
-	m["FloorId"] = fId[10 : len(fId)-2]
-	m["Type"] = "TASK_" + nType
-	taskJSON, err := json.Marshal(t)
-	if err != nil {
-		return fmt.Errorf("error marshalling task to json: %w", err)
-	}
-	m["Task"] = string(taskJSON)
+	m["FloorId"] = fId
+	m["Type"] = nType
+	m["Patch"] = string(patch)
 
 	pushMessage := &expo.PushMessage{
 		To:       []expo.ExponentPushToken{pushToken},
