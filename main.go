@@ -31,13 +31,13 @@ type Floor struct {
 type Task struct {
 	Id             string    `bson:"id"`
 	Name           string    `bson:"name"`
-	AssignedTo     int64     `bson:"assignedTo"`
+	AssignedTo     int       `bson:"assignedTo"`
 	Reminders      int       `bson:"reminders"`
 	AssignmentDate time.Time `bson:"assignmentDate"`
 }
 
 type Room struct {
-	Id       int64    `bson:"id"`
+	Id       int      `bson:"id"`
 	Number   string   `bson:"number"`
 	Order    int      `bson:"order"`
 	Resident Resident `bson:"resident"`

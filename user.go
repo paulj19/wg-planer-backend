@@ -15,8 +15,17 @@ import (
 )
 
 type CodeGenRequest struct {
+	Room Room `json:"room"`
+}
+
+type CodeMapEntry struct {
 	FloorId string `json:"floorId"`
 	Room    Room   `json:"room"`
+}
+
+type CodeSubmitResponse struct {
+	Floor Floor `json:"floor"`
+	Room  Room  `json:"room"`
 }
 
 type CodeGenResponse struct {
@@ -24,7 +33,7 @@ type CodeGenResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-var codeMap = make(map[string]CodeGenRequest)
+var codeMap = make(map[string]CodeMapEntry)
 
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -124,6 +133,7 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 
 func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
+	floorId := "669fca69d244526d709f6d76"
 	if r.Method == http.MethodOptions {
 		return
 	}
@@ -139,7 +149,10 @@ func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 		Code:      code,
 		Timestamp: time.Now(),
 	}
-	codeMap[code] = args
+	codeMap[code] = CodeMapEntry{
+		FloorId: floorId,
+		Room:    args.Room,
+	}
 	time.AfterFunc(10*time.Second, func() {
 		delete(codeMap, code)
 	})
@@ -149,6 +162,7 @@ func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
+	floorId := "669fca69d244526d709f6d76"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -165,7 +179,7 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Code not found", http.StatusUnprocessableEntity)
 		return
 	}
-	floor, err := getFloor(args.FloorId)
+	floor, err := getFloor(floorId)
 	if err != nil {
 		logger.Error("codeSubmit getFloor", slog.Any("error", err), slog.Any("args", args))
 		if err == mongo.ErrNoDocuments {
@@ -173,7 +187,8 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	roomIndex, err := findRoom(floor.Rooms, args.Room.Resident.Id)
+
+	roomIndex, err := findRoomById(floor.Rooms, args.Room.Id)
 	if err != nil {
 		logger.Error("codeSubmit findRoom", slog.Any("error", err), slog.Any("floor", floor), slog.Any("args", args))
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -181,19 +196,19 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//consistency check
-	if !reflect.DeepEqual(floor.Rooms[roomIndex].Resident, args.Room.Resident) {
+	if !reflect.DeepEqual(floor.Rooms[roomIndex], args.Room) {
 		http.Error(w, "Room changed since code generation", http.StatusUnprocessableEntity)
 		return
 	}
 
 	delete(codeMap, code)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(args)
+	json.NewEncoder(w).Encode(CodeSubmitResponse{Floor: floor, Room: args.Room})
 }
 
 func generateCode() string {
 	code := make([]byte, 4)
-	const samples = "0123456789abcdefghijklmnopqrstuvwxyz"
+	const samples = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i := 0; i < 4; i++ {
 		code[i] = samples[r.Intn(len(samples))]
 	}

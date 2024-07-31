@@ -13,8 +13,7 @@ import (
 func Test_codeGen(t *testing.T) {
 	t.Run("should genereate code", func(t *testing.T) {
 		codeStub := CodeGenRequest{
-			FloorId: "669fca69d244526d709f6d76",
-			Room:    FloorStub.Rooms[0],
+			Room: FloorStub.Rooms[6],
 		}
 
 		tuStubStr, err := json.Marshal(codeStub)
@@ -42,13 +41,8 @@ func Test_codeGen(t *testing.T) {
 
 func Test_codeSubmit(t *testing.T) {
 	t.Run("should submit code", func(t *testing.T) {
-		f, err := insertTestFloor(FloorStub)
-		if err != nil {
-			t.Error(err)
-		}
 		codeStub := CodeGenRequest{
-			FloorId: f.Id.String()[10:34],
-			Room:    FloorStub.Rooms[0],
+			Room: FloorStub.Rooms[6],
 		}
 
 		tuStubStr, err := json.Marshal(codeStub)
@@ -89,24 +83,19 @@ func Test_codeSubmit(t *testing.T) {
 				status, http.StatusOK)
 		}
 
-		var args CodeGenRequest
-		json.Unmarshal(rr.Body.Bytes(), &args)
+		var submitResp CodeSubmitResponse
+		json.Unmarshal(rr.Body.Bytes(), &submitResp)
 
-		if args.FloorId != codeStub.FloorId {
-			t.Errorf("expected floor id to be %v, got %v", codeStub.FloorId, args.FloorId)
+		if submitResp.Floor.Id.String()[10:34] != "669fca69d244526d709f6d76" {
+			t.Errorf("expected floor id to be %v, got %v", "669fca69d244526d709f6d76", submitResp.Floor.Id.String()[10:34])
 		}
-		if !reflect.DeepEqual(args.Room, codeStub.Room) {
-			t.Errorf("expected room to be %v, got %v", codeStub.Room, args.Room)
+		if !reflect.DeepEqual(submitResp.Room, FloorStub.Rooms[6]) {
+			t.Errorf("expected room to be %v, got %v", FloorStub.Rooms[6], submitResp.Room)
 		}
 	})
 	t.Run("should timeout", func(t *testing.T) {
-		f, err := insertTestFloor(FloorStub)
-		if err != nil {
-			t.Error(err)
-		}
 		codeStub := CodeGenRequest{
-			FloorId: f.Id.String()[10:34],
-			Room:    FloorStub.Rooms[0],
+			Room: FloorStub.Rooms[0],
 		}
 
 		tuStubStr, err := json.Marshal(codeStub)

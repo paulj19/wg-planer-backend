@@ -153,7 +153,7 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 func processTaskUpdate(floor *Floor, tu TaskUpdateRequest) (TaskUpdateResult, error) {
 	var tasksToUpdate []Task
 	if tu.Action == "RESIDENT_UNAVAILABLE" {
-		roomId := int64(0)
+		roomId := 0
 		for _, t := range floor.Tasks {
 			if t.AssignedTo == roomId {
 				tasksToUpdate = append(tasksToUpdate, t)
@@ -230,6 +230,15 @@ func findTaskIndex(tasks []Task, taskID string) (int, error) {
 func findRoom(rooms []Room, userId string) (int, error) {
 	for i, r := range rooms {
 		if r.Resident.Id == userId {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("Room not found")
+}
+
+func findRoomById(rooms []Room, roomId int) (int, error) {
+	for i, r := range rooms {
+		if r.Id == roomId {
 			return i, nil
 		}
 	}
