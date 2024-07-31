@@ -101,6 +101,8 @@ func main() {
 	http.HandleFunc("/register-expo-token", registerExpoPushToken)
 	http.HandleFunc("/remind-task", services.taskService.HandleTaskRemind)
 	http.HandleFunc("/update-availability", HandleAvailabilityStatusChange)
+	http.HandleFunc("/generate-code", HandleCodeGeneration)
+	http.HandleFunc("/submit-code", HandleCodeSubmit)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")

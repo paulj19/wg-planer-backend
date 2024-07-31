@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -12,6 +13,20 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type CodeGenRequest struct {
+	FloorId string `json:"floorId"`
+	Room    Room   `json:"room"`
+}
+
+type CodeGenResponse struct {
+	Code      string    `json:"code"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+var codeMap = make(map[string]CodeGenRequest)
+
+var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 	floorId := "669fca69d244526d709f6d76"
@@ -94,7 +109,6 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 		}
 
 		joinedNames := strings.Join(taskNames, ", ")
-		fmt.Println("XXX", taskUpdateResult.RoomToNotify)
 		for i := 0; i < 3; i++ {
 			err = sendNotification(taskUpdateResult.RoomToNotify, tasksJSON, floor.Id.String()[10:len(floor.Id.String())-2], "RESIDENT_UNAVAILABLE", fmt.Sprintf("%s has been assigned to you!", joinedNames))
 			if err != nil {
@@ -106,4 +120,82 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(waitTime)
 		}
 	}
+}
+
+func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	var args CodeGenRequest
+	err := json.NewDecoder(r.Body).Decode(&args)
+	if err != nil {
+		logger.Error("codeGeneration decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	code := generateCode()
+	codeGenResponse := CodeGenResponse{
+		Code:      code,
+		Timestamp: time.Now(),
+	}
+	codeMap[code] = args
+	time.AfterFunc(10*time.Second, func() {
+		delete(codeMap, code)
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(codeGenResponse)
+}
+
+func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	var code string
+	err := json.NewDecoder(r.Body).Decode(&code)
+	if err != nil {
+		logger.Error("codeSubmit decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	args, ok := codeMap[code]
+	if !ok {
+		http.Error(w, "Code not found", http.StatusUnprocessableEntity)
+		return
+	}
+	floor, err := getFloor(args.FloorId)
+	if err != nil {
+		logger.Error("codeSubmit getFloor", slog.Any("error", err), slog.Any("args", args))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	roomIndex, err := findRoom(floor.Rooms, args.Room.Resident.Id)
+	if err != nil {
+		logger.Error("codeSubmit findRoom", slog.Any("error", err), slog.Any("floor", floor), slog.Any("args", args))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	//consistency check
+	if !reflect.DeepEqual(floor.Rooms[roomIndex].Resident, args.Room.Resident) {
+		http.Error(w, "Room changed since code generation", http.StatusUnprocessableEntity)
+		return
+	}
+
+	delete(codeMap, code)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(args)
+}
+
+func generateCode() string {
+	code := make([]byte, 4)
+	const samples = "0123456789abcdefghijklmnopqrstuvwxyz"
+	for i := 0; i < 4; i++ {
+		code[i] = samples[r.Intn(len(samples))]
+	}
+	return string(code)
 }
