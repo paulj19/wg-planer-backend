@@ -96,7 +96,7 @@ func updateTasks(f Floor) (Floor, error) {
 		return Floor{}, err
 	}
 	if result.ModifiedCount == 0 {
-		return Floor{}, mongo.ErrNoDocuments
+		return f, nil
 	}
 	fUpdated, err := getUpdatedFloor(f.Id)
 	if err != nil {
@@ -111,7 +111,7 @@ func updateRoom(f Floor, roomIndex int) (Floor, error) {
 		return Floor{}, err
 	}
 	if result.ModifiedCount == 0 {
-		return Floor{}, mongo.ErrNoDocuments
+		return f, nil
 	}
 	fUpdated, err := getUpdatedFloor(f.Id)
 	if err != nil {

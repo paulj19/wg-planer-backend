@@ -95,7 +95,7 @@ func main() {
 
 	// initAuthService(AuthServiceImpl{pubKey: pubKey})
 
-	http.HandleFunc("/floor/", curdFloor)
+	http.HandleFunc("/floor/", crudFloor)
 	http.HandleFunc("/post-login", startupInfo)
 	http.HandleFunc("/update-task", services.taskService.HandleTaskUpdate)
 	http.HandleFunc("/register-expo-token", registerExpoPushToken)
@@ -103,6 +103,7 @@ func main() {
 	http.HandleFunc("/update-availability", HandleAvailabilityStatusChange)
 	http.HandleFunc("/generate-code", HandleCodeGeneration)
 	http.HandleFunc("/submit-code", HandleCodeSubmit)
+	http.HandleFunc("/add-newResident", HandleAddNewResident)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")
@@ -158,7 +159,7 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(getFloorResponse)
 }
 
-func curdFloor(w http.ResponseWriter, r *http.Request) {
+func crudFloor(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
 	switch r.Method {
 	case http.MethodPost:

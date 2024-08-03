@@ -29,8 +29,12 @@ type CodeSubmitResponse struct {
 }
 
 type CodeGenResponse struct {
-	Code      string    `json:"code"`
-	Timestamp time.Time `json:"timestamp"`
+	Code string `json:"generatedCode"`
+}
+
+type AddNewResidentRequest struct {
+	FloorId string `json:"floorId"`
+	Room    Room   `json:"room"`
 }
 
 var codeMap = make(map[string]CodeMapEntry)
@@ -146,14 +150,13 @@ func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 	code := generateCode()
 	codeGenResponse := CodeGenResponse{
-		Code:      code,
-		Timestamp: time.Now(),
+		Code: code,
 	}
 	codeMap[code] = CodeMapEntry{
 		FloorId: floorId,
 		Room:    args.Room,
 	}
-	time.AfterFunc(10*time.Second, func() {
+	time.AfterFunc(20*time.Minute, func() {
 		delete(codeMap, code)
 	})
 
@@ -167,14 +170,15 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
-	var code string
-	err := json.NewDecoder(r.Body).Decode(&code)
+	var resp CodeGenResponse
+	err := json.NewDecoder(r.Body).Decode(&resp)
 	if err != nil {
 		logger.Error("codeSubmit decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	args, ok := codeMap[code]
+
+	args, ok := codeMap[resp.Code]
 	if !ok {
 		http.Error(w, "Code not found", http.StatusUnprocessableEntity)
 		return
@@ -201,9 +205,49 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	delete(codeMap, code)
+	delete(codeMap, resp.Code)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(CodeSubmitResponse{Floor: floor, Room: args.Room})
+}
+
+func HandleAddNewResident(w http.ResponseWriter, r *http.Request) {
+	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	var addResRequest AddNewResidentRequest
+	err := json.NewDecoder(r.Body).Decode(&addResRequest)
+	if err != nil {
+		logger.Error("addNewResident decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	floor, err := getFloor(addResRequest.FloorId)
+	if err != nil {
+		logger.Error("addNewResident getFloor", slog.Any("error", err), slog.Any("addResRequest", addResRequest))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	roomIndex, err := findRoomById(floor.Rooms, addResRequest.Room.Id)
+	if err != nil {
+		logger.Error("addNewResident findRoom", slog.Any("error", err), slog.Any("floor", floor), slog.Any("addResRequest", addResRequest))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
+	floor.Rooms[roomIndex].Resident = addResRequest.Room.Resident
+	fUp, err := updateRoom(floor, roomIndex)
+	if err != nil {
+		logger.Error("addNewResident updating DB room", slog.Any("error", err), slog.Any("floor", fUp), slog.Any("addResRequest", addResRequest))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fUp)
 }
 
 func generateCode() string {
