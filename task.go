@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -31,6 +32,15 @@ type TaskUpdateResult struct {
 	RoomToNotify Room   `json:"roomToNotify"`
 }
 
+type CreateTaskRequest struct {
+	Taskname string `json:"taskname"`
+}
+
+type VotingRequest struct {
+	Voting Voting `json:"voting"`
+	Action string `json:"action"`
+}
+
 func (s TaskUpdateRequest) HandleTaskUpdate(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
@@ -43,7 +53,7 @@ func (s TaskUpdateRequest) HandleTaskUpdate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := getFloor(taskUpdate.FloorId)
+	floor, err := FindFloor(taskUpdate.FloorId)
 	if err != nil {
 		logger.Error("taskUpdate getFloor", slog.Any("error", err), slog.Any("taskToUpdate", taskUpdate))
 		if err == mongo.ErrNoDocuments {
@@ -98,7 +108,7 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	f, err := getFloor(tu.FloorId)
+	f, err := FindFloor(tu.FloorId)
 	if err != nil {
 		logger.Error("taskRemind getFloor", slog.Any("error", err), slog.Any("taskToRemind", tu.Task))
 		if err == mongo.ErrNoDocuments {
@@ -148,6 +158,157 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 		waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
 		time.Sleep(waitTime)
 	}
+}
+
+func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
+	floorId := "669fca69d244526d709f6d76"
+	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	var request CreateTaskRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		logger.Error("createTask decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	floor, err := FindFloor(floorId)
+	if err != nil {
+		logger.Error("createTask getFloor", slog.Any("error", err), slog.Any("requst", request))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	var nextVotId int
+	if len(floor.Votings) == 0 {
+		nextVotId = 1
+	} else {
+		nextVotId = floor.Votings[len(floor.Votings)-1].Id + 1
+	}
+	fmt.Println("Next voting id: ", floor.Votings)
+	voting := Voting{
+		Id:           nextVotId,
+		Type:         "CREATE_TASK",
+		Data:         request.Taskname,
+		Accepts:      0,
+		Rejects:      0,
+		LaunchDate:   time.Now(),
+		VotingWindow: 10 * time.Second,
+		// VotingWindow: 2 * 24 * time.Hour,
+	}
+
+	floor, err = InsertVoting(floor.Id, voting)
+	if err != nil {
+		logger.Error("createTask updating DB", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("votingToCreate", voting))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	time.AfterFunc(voting.VotingWindow, func() {
+		floor, err = FindFloor(floorId)
+		if err != nil {
+			logger.Error("createTask remove voting getFloor", slog.Any("error", err), slog.Any("request", request), slog.Any("votingToCreate", voting))
+			return
+		}
+		floor, err := deleteVoting(floor.Id, voting.Id)
+		if err != nil {
+			logger.Error("createTask delete voting", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("votingToCreate", voting))
+			return
+		}
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(floor)
+}
+
+func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
+	floorId := "669fca69d244526d709f6d76"
+	corsHandler(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	var request VotingRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		logger.Error("taskCreateAccept decoding data payload", slog.Any("error", err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	fId, _ := primitive.ObjectIDFromHex("669fca69d244526d709f6d76")
+	voting, err := FindVoting(fId, request.Voting.Id)
+	if err != nil {
+		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if voting.Accepts > 1 {
+		//TODO consistency check via accept count comparison
+		floor, err := FindFloor(floorId)
+		if err != nil {
+			logger.Error("taskCreateAccept getFloor", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		_, err = CreateTask(floor, voting.Data)
+		if err != nil {
+			logger.Error("taskCreateAccept createTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		fUp, err := deleteVoting(fId, request.Voting.Id)
+		if err != nil {
+			logger.Error("taskCreateAccept deleteVoting", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(fUp)
+	}
+
+	voting.Accepts += 1
+	fUp, err := updateVoting(fId, voting)
+	if err != nil {
+		logger.Error("taskCreateAccept updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fUp)
+}
+
+func CreateTask(floor Floor, taskname string) (Floor, error) {
+	taskId, err := strconv.Atoi(floor.Tasks[len(floor.Tasks)-1].Id)
+	if err != nil {
+		return Floor{}, err
+	}
+
+	newTask := Task{
+		Id:             strconv.Itoa(taskId + 1),
+		Name:           taskname,
+		AssignedTo:     -1,
+		AssignmentDate: time.Now(),
+		Reminders:      0,
+	}
+
+	fUp, err := InsertTask(floor.Id, newTask)
+	if err != nil {
+		return Floor{}, fmt.Errorf("createTask updating DB: %w, %v", err, newTask)
+	}
+	return fUp, nil
 }
 
 func processTaskUpdate(floor *Floor, tu TaskUpdateRequest) (TaskUpdateResult, error) {

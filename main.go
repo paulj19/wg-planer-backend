@@ -26,6 +26,7 @@ type Floor struct {
 	Residents []string           `bson:"residents"`
 	Tasks     []Task             `bson:"tasks"`
 	Rooms     []Room             `bson:"rooms"`
+	Votings   []Voting           `bson:"votings"`
 }
 
 type Task struct {
@@ -48,6 +49,16 @@ type Resident struct {
 	Name          string `bson:"name"`
 	Available     bool   `bson:"available"`
 	ExpoPushToken string `bson:"expoPushToken"`
+}
+
+type Voting struct {
+	Id           int           `bson:"id"`
+	Type         string        `bson:"type"`
+	Data         string        `bson:"data"`
+	Accepts      int           `bson:"accepts"`
+	Rejects      int           `bson:"rejects"`
+	LaunchDate   time.Time     `bson:"date"`
+	VotingWindow time.Duration `bson:"votingWindow"`
 }
 
 type UserProfile struct {
@@ -104,6 +115,8 @@ func main() {
 	http.HandleFunc("/generate-code", HandleCodeGeneration)
 	http.HandleFunc("/submit-code", HandleCodeSubmit)
 	http.HandleFunc("/add-newResident", HandleAddNewResident)
+	http.HandleFunc("/create-task", HandleCreateTask)
+	http.HandleFunc("/update-voting", HandleAcceptTaskCreate)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")
@@ -127,7 +140,7 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 	// }
 
 	floorId := "669fca69d244526d709f6d76"
-	floor, err := getFloor(floorId)
+	floor, err := FindFloor(floorId)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			http.Error(w, "Floor not found", http.StatusNotFound)
@@ -179,7 +192,7 @@ func crudFloor(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(newFloor)
 	case http.MethodGet:
 		floorId := r.URL.Path[len("/floor/"):]
-		floor, err := getFloor(floorId)
+		floor, err := FindFloor(floorId)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				http.Error(w, "Floor not found", http.StatusNotFound)
@@ -206,7 +219,7 @@ func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error reading request body %v", err), http.StatusBadRequest)
 		return
 	}
-	floor, err := getFloor(registerTokenRequest.FloorId)
+	floor, err := FindFloor(registerTokenRequest.FloorId)
 	if err != nil {
 		logger.Error("registerTokenRequest getFloor", slog.Any("error", err), slog.Any("registerTokenRequest", registerTokenRequest))
 		http.Error(w, "Error getting floor", http.StatusUnprocessableEntity)

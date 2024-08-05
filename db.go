@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -61,7 +62,7 @@ func insertNewFloor(floor Floor) (Floor, error) {
 	return newFloor, nil
 }
 
-func getFloor(floorId string) (Floor, error) {
+func FindFloor(floorId string) (Floor, error) {
 	var floor Floor
 	objectId, err := primitive.ObjectIDFromHex(floorId)
 	if err != nil {
@@ -99,6 +100,83 @@ func updateTasks(f Floor) (Floor, error) {
 		return f, nil
 	}
 	fUpdated, err := getUpdatedFloor(f.Id)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func InsertTask(fId primitive.ObjectID, task Task) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$push": bson.M{"tasks": task}})
+	if err != nil {
+		return Floor{}, err
+	}
+
+	fUpdated, err := getUpdatedFloor(fId)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func InsertVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$push": bson.M{"votings": voting}})
+	if err != nil {
+		return Floor{}, err
+	}
+
+	fUpdated, err := getUpdatedFloor(fId)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func FindVoting(fId primitive.ObjectID, votingId int) (Voting, error) {
+	var voting Voting
+	err := collection.FindOne(context.Background(),
+		bson.M{"_id": fId, "votings.id": votingId}, options.FindOne().SetProjection(bson.M{"votings.$": votingId})).Decode(&voting)
+	fmt.Println("XXX", voting, err)
+	if err != nil {
+		return Voting{}, err
+	}
+
+	if reflect.DeepEqual(voting, Voting{}) {
+		return Voting{}, fmt.Errorf("voting with id %d not found", votingId)
+	}
+
+	return voting, nil
+}
+
+func updateVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$set": bson.M{"votings.$[elem]": voting}},
+		options.Update().SetArrayFilters(options.ArrayFilters{Filters: []interface{}{bson.M{"elem.id": voting.Id}}}).SetUpsert(true))
+	if err != nil {
+		return Floor{}, err
+	}
+
+	fUpdated, err := getUpdatedFloor(fId)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func deleteVoting(fId primitive.ObjectID, votingId int) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$unset": bson.M{"votings.$[elem]": nil}},
+		options.Update().SetArrayFilters(options.ArrayFilters{Filters: []interface{}{bson.M{"elem.id": votingId}}}))
+	if err != nil {
+		return Floor{}, err
+	}
+	fUpdated, err := getUpdatedFloor(fId)
 	if err != nil {
 		return Floor{}, err
 	}

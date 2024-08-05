@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -943,6 +945,159 @@ func Test_residentUnavailable(t *testing.T) {
 
 		if updatedFloor.Rooms[1].Resident.Available != true {
 			t.Errorf("resident not unavailable: got %v want %v", updatedFloor.Rooms[0].Resident.Available, false)
+		}
+	})
+}
+
+func Test_createTask(t *testing.T) {
+	t.Run("should create voting", func(t *testing.T) {
+		_, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := CreateTaskRequest{
+			Taskname: "Test Task",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleCreateTask)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusCreated {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusCreated)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		expectedVoting := Voting{
+			Id:           1,
+			Type:         "CREATE_TASK",
+			Data:         "Test Task",
+			Accepts:      0,
+			Rejects:      0,
+			VotingWindow: 2 * 24 * time.Hour,
+		}
+
+		if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].Accepts != expectedVoting.Accepts && updatedFloor.Votings[0].Rejects != expectedVoting.Rejects && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow {
+			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+		}
+
+	})
+	t.Run("should delete voting on timeout", func(t *testing.T) {
+		tuStub := CreateTaskRequest{
+			Taskname: "Test Task",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleCreateTask)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusCreated {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusCreated)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		expectedVoting := Voting{
+			Id:      1,
+			Type:    "CREATE_TASK",
+			Data:    "Test Task",
+			Accepts: 0,
+			Rejects: 0,
+		}
+
+		if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].Accepts != expectedVoting.Accepts && updatedFloor.Votings[0].Rejects != expectedVoting.Rejects {
+			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+		}
+
+		time.Sleep(12 * time.Second)
+
+		fId, err := primitive.ObjectIDFromHex("669fca69d244526d709f6d76")
+		if err != nil {
+			t.Error(err)
+		}
+		_, err = FindVoting(fId, updatedFloor.Votings[0].Id)
+		if err == nil || !strings.Contains(err.Error(), "no documents in result") {
+			t.Errorf("voting not deleted: got %v want %v", err, nil)
+		}
+	})
+
+	t.Run("should increase accept count", func(t *testing.T) {
+		_, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := CreateTaskRequest{
+			Taskname: "Test Task",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleCreateTask)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusCreated {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusCreated)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		expectedVoting := Voting{
+			Id:           1,
+			Type:         "CREATE_TASK",
+			Data:         "Test Task",
+			Accepts:      0,
+			Rejects:      0,
+			VotingWindow: 2 * 24 * time.Hour,
+		}
+
+		if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].Accepts != expectedVoting.Accepts && updatedFloor.Votings[0].Rejects != expectedVoting.Rejects && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow {
+			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+		}
+
+		votingAccept := VotingRequest{
+			Voting: updatedFloor.Votings[0],
+			Action: "ACCEPT",
+		}
+
+		votingAcceptStr, err := json.Marshal(votingAccept)
+		if err != nil {
+			t.Error(err)
+		}
+		req, err = http.NewRequest("POST", "/update-voting", bytes.NewReader(votingAcceptStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr = httptest.NewRecorder()
+		handler = http.HandlerFunc(HandleAcceptTaskCreate)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		if updatedFloor.Votings[0].Accepts != 1 {
+			t.Errorf("voting not accepted: got %v want %v", updatedFloor.Votings[0].Accepts, 1)
 		}
 	})
 }

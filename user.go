@@ -60,7 +60,7 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := getFloor(floorId)
+	floor, err := FindFloor(floorId)
 	if err != nil {
 		logger.Error("availabilityStatusChange getFloor", slog.Any("error", err), slog.Any("taskUpdate", taskUpdate))
 		if err == mongo.ErrNoDocuments {
@@ -183,7 +183,7 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Code not found", http.StatusUnprocessableEntity)
 		return
 	}
-	floor, err := getFloor(floorId)
+	floor, err := FindFloor(floorId)
 	if err != nil {
 		logger.Error("codeSubmit getFloor", slog.Any("error", err), slog.Any("args", args))
 		if err == mongo.ErrNoDocuments {
@@ -222,7 +222,7 @@ func HandleAddNewResident(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := getFloor(addResRequest.FloorId)
+	floor, err := FindFloor(addResRequest.FloorId)
 	if err != nil {
 		logger.Error("addNewResident getFloor", slog.Any("error", err), slog.Any("addResRequest", addResRequest))
 		if err == mongo.ErrNoDocuments {
