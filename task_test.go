@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -951,12 +953,13 @@ func Test_residentUnavailable(t *testing.T) {
 
 func Test_createTask(t *testing.T) {
 	t.Run("should create voting", func(t *testing.T) {
+		randomTaskName := strconv.Itoa(rand.Intn(100)) + " new task"
 		_, err := insertTestFloor(FloorStub)
 		if err != nil {
 			t.Error(err)
 		}
 		tuStub := CreateTaskRequest{
-			Taskname: "Test Task",
+			Taskname: randomTaskName,
 		}
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
@@ -978,7 +981,7 @@ func Test_createTask(t *testing.T) {
 		expectedVoting := Voting{
 			Id:           1,
 			Type:         "CREATE_TASK",
-			Data:         "Test Task",
+			Data:         randomTaskName,
 			Accepts:      0,
 			Rejects:      0,
 			VotingWindow: 2 * 24 * time.Hour,
@@ -990,8 +993,9 @@ func Test_createTask(t *testing.T) {
 
 	})
 	t.Run("should delete voting on timeout", func(t *testing.T) {
+		randomTaskName := strconv.Itoa(rand.Intn(100)) + " new task"
 		tuStub := CreateTaskRequest{
-			Taskname: "Test Task",
+			Taskname: randomTaskName,
 		}
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
@@ -1013,7 +1017,7 @@ func Test_createTask(t *testing.T) {
 		expectedVoting := Voting{
 			Id:      1,
 			Type:    "CREATE_TASK",
-			Data:    "Test Task",
+			Data:    randomTaskName,
 			Accepts: 0,
 			Rejects: 0,
 		}
@@ -1034,13 +1038,78 @@ func Test_createTask(t *testing.T) {
 		}
 	})
 
-	t.Run("should increase accept count", func(t *testing.T) {
-		_, err := insertTestFloor(FloorStub)
-		if err != nil {
-			t.Error(err)
-		}
+	// t.Run("should increase accept count", func(t *testing.T) {
+	// 	_, err := insertTestFloor(FloorStub)
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 	}
+	// 	tuStub := CreateTaskRequest{
+	// 		Taskname: "Test Task",
+	// 	}
+	// 	tuStubStr, err := json.Marshal(tuStub)
+	// 	req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 	}
+	// 	rr := httptest.NewRecorder()
+	// 	handler := http.HandlerFunc(HandleCreateTask)
+	// 	handler.ServeHTTP(rr, req)
+
+	// 	if status := rr.Code; status != http.StatusCreated {
+	// 		t.Errorf("handler returned wrong status code: got %v want %v",
+	// 			status, http.StatusCreated)
+	// 	}
+
+	// 	var updatedFloor Floor
+	// 	json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+	// 	expectedVoting := Voting{
+	// 		Id:           1,
+	// 		Type:         "CREATE_TASK",
+	// 		Data:         "Test Task",
+	// 		Accepts:      0,
+	// 		Rejects:      0,
+	// 		VotingWindow: 2 * 24 * time.Hour,
+	// 	}
+
+	// 	if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].Accepts != expectedVoting.Accepts && updatedFloor.Votings[0].Rejects != expectedVoting.Rejects && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow {
+	// 		t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+	// 	}
+
+	// 	votingAccept := VotingRequest{
+	// 		Voting: updatedFloor.Votings[0],
+	// 		Action: "ACCEPT",
+	// 	}
+
+	// 	votingAcceptStr, err := json.Marshal(votingAccept)
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 	}
+	// 	req, err = http.NewRequest("POST", "/update-voting", bytes.NewReader(votingAcceptStr))
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 	}
+	// 	rr = httptest.NewRecorder()
+	// 	handler = http.HandlerFunc(HandleAcceptTaskCreate)
+	// 	handler.ServeHTTP(rr, req)
+
+	// 	if status := rr.Code; status != http.StatusOK {
+	// 		t.Errorf("handler returned wrong status code: got %v want %v",
+	// 			status, http.StatusOK)
+	// 	}
+
+	// 	json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+	// 	if updatedFloor.Votings[0].Accepts != 1 {
+	// 		t.Errorf("voting not accepted: got %v want %v", updatedFloor.Votings[0].Accepts, 1)
+	// 	}
+
+	// 	deleteVoting(updatedFloor.Id, updatedFloor.Votings[0].Id)
+	// })
+	t.Run("should create task when accept", func(t *testing.T) {
+		randomTaskName := strconv.Itoa(rand.Intn(100)) + " new task"
 		tuStub := CreateTaskRequest{
-			Taskname: "Test Task",
+			Taskname: randomTaskName,
 		}
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
@@ -1062,7 +1131,7 @@ func Test_createTask(t *testing.T) {
 		expectedVoting := Voting{
 			Id:           1,
 			Type:         "CREATE_TASK",
-			Data:         "Test Task",
+			Data:         randomTaskName,
 			Accepts:      0,
 			Rejects:      0,
 			VotingWindow: 2 * 24 * time.Hour,
@@ -1096,8 +1165,92 @@ func Test_createTask(t *testing.T) {
 
 		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
 
-		if updatedFloor.Votings[0].Accepts != 1 {
-			t.Errorf("voting not accepted: got %v want %v", updatedFloor.Votings[0].Accepts, 1)
+		expectedNewTask := Task{
+			Name:       randomTaskName,
+			AssignedTo: -1,
+			Reminders:  0,
+		}
+
+		if updatedFloor.Tasks[len(updatedFloor.Tasks)-1].Name != expectedNewTask.Name && updatedFloor.Tasks[len(updatedFloor.Tasks)-1].AssignedTo != expectedNewTask.AssignedTo && updatedFloor.Tasks[len(updatedFloor.Tasks)-1].Reminders != expectedNewTask.Reminders {
+			t.Errorf("task not created: got %v want %v", updatedFloor.Tasks[len(updatedFloor.Tasks)-1], expectedNewTask)
+		}
+
+		if len(updatedFloor.Votings) != 0 {
+			t.Errorf("voting not deleted: got %v want %v", len(updatedFloor.Votings), 0)
+		}
+	})
+
+	t.Run("should delete voting on reject", func(t *testing.T) {
+		randomTaskName := strconv.Itoa(rand.Intn(100)) + " new task"
+		_, err := insertTestFloor(FloorStub)
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := CreateTaskRequest{
+			Taskname: randomTaskName,
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/create-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleCreateTask)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusCreated {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusCreated)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		expectedVoting := Voting{
+			Id:           1,
+			Type:         "CREATE_TASK",
+			Data:         randomTaskName,
+			Accepts:      0,
+			Rejects:      0,
+			VotingWindow: 2 * 24 * time.Hour,
+		}
+
+		if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].Accepts != expectedVoting.Accepts && updatedFloor.Votings[0].Rejects != expectedVoting.Rejects && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow {
+			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+		}
+
+		votingAccept := VotingRequest{
+			Voting: updatedFloor.Votings[0],
+			Action: "REJECT",
+		}
+
+		votingAcceptStr, err := json.Marshal(votingAccept)
+		if err != nil {
+			t.Error(err)
+		}
+		req, err = http.NewRequest("POST", "/update-voting", bytes.NewReader(votingAcceptStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr = httptest.NewRecorder()
+		handler = http.HandlerFunc(HandleAcceptTaskCreate)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		for _, task := range updatedFloor.Tasks {
+			if task.Name == randomTaskName {
+				t.Errorf("task created on reject")
+			}
+		}
+
+		if len(updatedFloor.Votings) != 0 {
+			t.Errorf("voting not deleted: got %v want %v", len(updatedFloor.Votings), 0)
 		}
 	})
 }

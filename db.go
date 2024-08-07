@@ -138,11 +138,21 @@ func InsertVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
 
 func FindVoting(fId primitive.ObjectID, votingId int) (Voting, error) {
 	var voting Voting
-	err := collection.FindOne(context.Background(),
-		bson.M{"_id": fId, "votings.id": votingId}, options.FindOne().SetProjection(bson.M{"votings.$": votingId})).Decode(&voting)
-	fmt.Println("XXX", voting, err)
+	//TODO make it work
+	// err := collection.FindOne(context.Background(),
+	// 	bson.M{"_id": fId, "votings.id": votingId},
+	// 	options.FindOne().SetProjection(bson.M{"votings.$": votingId})).Decode(&voting)
+
+	var floor Floor
+	err := collection.FindOne(context.Background(), bson.M{"_id": fId}).Decode(&floor)
 	if err != nil {
 		return Voting{}, err
+	}
+	for _, v := range floor.Votings {
+		if v.Id == votingId {
+			voting = v
+			break
+		}
 	}
 
 	if reflect.DeepEqual(voting, Voting{}) {
@@ -171,8 +181,11 @@ func updateVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
 func deleteVoting(fId primitive.ObjectID, votingId int) (Floor, error) {
 	_, err := collection.UpdateOne(context.Background(),
 		bson.M{"_id": fId},
-		bson.M{"$unset": bson.M{"votings.$[elem]": nil}},
-		options.Update().SetArrayFilters(options.ArrayFilters{Filters: []interface{}{bson.M{"elem.id": votingId}}}))
+		bson.M{"$pull": bson.M{"votings": bson.M{"id": votingId}}})
+	// _, err := collection.UpdateOne(context.Background(),
+	// 	bson.M{"_id": fId},
+	// 	bson.M{"$unset": bson.M{"votings.$[elem]": nil}},
+	// 	options.Update().SetArrayFilters(options.ArrayFilters{Filters: []interface{}{bson.M{"elem.id": votingId}}}))
 	if err != nil {
 		return Floor{}, err
 	}

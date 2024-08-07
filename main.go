@@ -59,6 +59,7 @@ type Voting struct {
 	Rejects      int           `bson:"rejects"`
 	LaunchDate   time.Time     `bson:"date"`
 	VotingWindow time.Duration `bson:"votingWindow"`
+	CreatedBy    string        `bson:"createdBy"`
 }
 
 type UserProfile struct {

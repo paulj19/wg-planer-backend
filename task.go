@@ -162,6 +162,7 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 
 func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	floorId := "669fca69d244526d709f6d76"
+	userId := "1"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -188,7 +189,6 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	} else {
 		nextVotId = floor.Votings[len(floor.Votings)-1].Id + 1
 	}
-	fmt.Println("Next voting id: ", floor.Votings)
 	voting := Voting{
 		Id:           nextVotId,
 		Type:         "CREATE_TASK",
@@ -197,6 +197,7 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Rejects:      0,
 		LaunchDate:   time.Now(),
 		VotingWindow: 10 * time.Second,
+		CreatedBy:    userId,
 		// VotingWindow: 2 * 24 * time.Hour,
 	}
 
@@ -218,15 +219,19 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 			logger.Error("createTask delete voting", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("votingToCreate", voting))
 			return
 		}
+		//TODO send notification to all
 	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(floor)
+
+	//TODO send notification to all
 }
 
 func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
 	floorId := "669fca69d244526d709f6d76"
+	// userId := "1"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -239,19 +244,24 @@ func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fId, _ := primitive.ObjectIDFromHex("669fca69d244526d709f6d76")
+	fId, _ := primitive.ObjectIDFromHex(floorId)
 	voting, err := FindVoting(fId, request.Voting.Id)
 	if err != nil {
 		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
+			//TODO just a hack as no notification is sent, some stale notifications can exist
+			// http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if voting.Accepts > 1 {
+	// if voting.CreatedBy == userId {
+	// return
+	// }
+
+	if request.Action == "ACCEPT" {
 		//TODO consistency check via accept count comparison
 		floor, err := FindFloor(floorId)
 		if err != nil {
@@ -266,28 +276,30 @@ func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		fUp, err := deleteVoting(fId, request.Voting.Id)
-		if err != nil {
-			logger.Error("taskCreateAccept deleteVoting", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(fUp)
+		//TODO send notification to all
 	}
 
-	voting.Accepts += 1
-	fUp, err := updateVoting(fId, voting)
+	fUp, err := deleteVoting(fId, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskCreateAccept updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskCreateAccept deleteVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(fUp)
+	return
+
+	// voting.Accepts += 1
+	// fUp, err := updateVoting(fId, voting)
+	// if err != nil {
+	// 	logger.Error("taskCreateAccept updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// w.Header().Set("Content-Type", "application/json")
+	// json.NewEncoder(w).Encode(fUp)
 }
 
 func CreateTask(floor Floor, taskname string) (Floor, error) {
