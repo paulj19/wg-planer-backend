@@ -54,9 +54,9 @@ type Resident struct {
 type Voting struct {
 	Id           int           `bson:"id"`
 	Type         string        `bson:"type"`
-	Data         string        `bson:"data"`
-	Accepts      int           `bson:"accepts"`
-	Rejects      int           `bson:"rejects"`
+	Data         any           `bson:"data"`
+	Accepts      []string      `bson:"accepts"`
+	Rejects      []string      `bson:"rejects"`
 	LaunchDate   time.Time     `bson:"date"`
 	VotingWindow time.Duration `bson:"votingWindow"`
 	CreatedBy    string        `bson:"createdBy"`
@@ -87,6 +87,7 @@ type RegisterTokenRequest struct {
 //   AssignedTo string `bson:"assignedTo"`
 // }
 
+var IsTest bool
 var authService AuthService
 
 type services struct {
@@ -96,6 +97,7 @@ type services struct {
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 func main() {
+	//TODO handle panics so that the server does not shut down
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
@@ -116,8 +118,8 @@ func main() {
 	http.HandleFunc("/generate-code", HandleCodeGeneration)
 	http.HandleFunc("/submit-code", HandleCodeSubmit)
 	http.HandleFunc("/add-newResident", HandleAddNewResident)
-	http.HandleFunc("/create-task", HandleCreateTask)
-	http.HandleFunc("/update-voting", HandleAcceptTaskCreate)
+	http.HandleFunc("/create-task", HandleTaskCreateDelete)
+	http.HandleFunc("/update-voting", HandleTaskVotingResponse)
 
 	defer disconnectMongo(ctx)
 	log.Println("Server running on port 8080")

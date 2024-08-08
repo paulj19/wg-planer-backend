@@ -183,6 +183,7 @@ var FloorStub Floor
 
 func TestMain(m *testing.M) {
 	log.Println("setting up test environment")
+	IsTest = true
 	err := json.Unmarshal([]byte(floorStub), &FloorStub)
 	if err != nil {
 		log.Fatal("TestSetUp could not unmarshal FloorStub ", err)

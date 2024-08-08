@@ -32,11 +32,12 @@ type TaskUpdateResult struct {
 	RoomToNotify Room   `json:"roomToNotify"`
 }
 
-type CreateTaskRequest struct {
-	Taskname string `json:"taskname"`
+type TaskVotingRequest struct {
+	Task   Task   `json:"task"`
+	Action string `json:"action"`
 }
 
-type VotingRequest struct {
+type VotingActionRequest struct {
 	Voting Voting `json:"voting"`
 	Action string `json:"action"`
 }
@@ -160,17 +161,17 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
+func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 	floorId := "669fca69d244526d709f6d76"
 	userId := "1"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
 	}
-	var request CreateTaskRequest
+	var request TaskVotingRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
-		logger.Error("createTask decoding data payload", slog.Any("error", err))
+		logger.Error("createDeleteTask decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -191,10 +192,10 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	voting := Voting{
 		Id:           nextVotId,
-		Type:         "CREATE_TASK",
-		Data:         request.Taskname,
-		Accepts:      0,
-		Rejects:      0,
+		Type:         request.Action,
+		Data:         request.Task,
+		Accepts:      []string{},
+		Rejects:      []string{},
 		LaunchDate:   time.Now(),
 		VotingWindow: 10 * time.Second,
 		CreatedBy:    userId,
@@ -221,30 +222,47 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(floor)
 
-	sendCreateTaskNotification(floor, voting, "VOTING_ADD")
+	// sendCreateDelTaskNotification(floor, voting, "VOTING_ADD")
 }
 
-func sendCreateTaskNotification(floor Floor, voting Voting, nType string) {
+func sendCreateDelTaskNotification(floor Floor, voting Voting, nType string) {
 	votingJson, err := json.Marshal(floor.Votings)
 	if err != nil {
 		logger.Error("sendCreateTaskNotification marshalling voting to json", slog.Any("error", err))
 		return
 	}
+
+	var notMsg string
+	if voting.Type == "CREATE_TASK" {
+		notMsg = "Request to create a new task"
+	} else if voting.Type == "DELETE_TASK" {
+		notMsg = "Request to delete a task"
+	}
+
 	for _, r := range floor.Rooms {
 		if r.Resident.Id != voting.CreatedBy {
-			sendNotification(r, votingJson, floor.Id.String()[10:len(floor.Id.String())-2], nType, "Request to create a new task")
+			for i := 0; i < 3; i++ {
+				err := sendNotification(r, votingJson, floor.Id.String()[10:len(floor.Id.String())-2], nType, notMsg)
+				if err != nil {
+					logger.Error("taskCreateDel sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", floor), slog.Any("voting", voting))
+				} else {
+					break
+				}
+				waitTime := 2 * time.Second << (i) // Exponential backoff with base 2
+				time.Sleep(waitTime)
+			}
 		}
 	}
 }
 
-func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
+func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 	floorId := "669fca69d244526d709f6d76"
-	// userId := "1"
+	userId := "1"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
 	}
-	var request VotingRequest
+	var request VotingActionRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		logger.Error("taskCreateAccept decoding data payload", slog.Any("error", err))
@@ -265,31 +283,58 @@ func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if voting.CreatedBy == userId {
-	// return
-	// }
-
-	if request.Action == "ACCEPT" {
-		//TODO consistency check via accept count comparison
-		floor, err := FindFloor(floorId)
-		if err != nil {
-			logger.Error("taskCreateAccept getFloor", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		_, err = CreateTask(floor, voting.Data)
-		if err != nil {
-			logger.Error("taskCreateAccept createTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		//TODO send notification to all
+	if voting.CreatedBy == userId && !IsTest {
+		return
 	}
 
+	//action is accept, can be create or delete task
+	if request.Action == "ACCEPT" {
+		floor, err := FindFloor(floorId)
+		if err != nil {
+			logger.Error("taskVotingResponse getFloor", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if voting.Type == "CREATE_TASK" {
+			//TODO consistency check via accept count comparison
+			_, err = CreateTask(floor, voting.Data.(Task).Id)
+			if err != nil {
+				logger.Error("taskVotingResponse createTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			//TODO send notification to all
+		} else if voting.Type == "DELETE_TASK" {
+			//check if all residents accepted delete, then delete else update voting
+			voting.Accepts = append(voting.Accepts, userId)
+			if len(voting.Accepts) == len(floor.Rooms) {
+				_, err = deleteTask(floor.Id, voting.Data.(Task).Id)
+				if err != nil {
+					logger.Error("taskVotingResponse deleteTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+					//TODO consistency check via accept count comparison
+				}
+			} else {
+				fUp, err := updateVoting(fId, voting)
+				if err != nil {
+					logger.Error("taskVotingResponse updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(fUp)
+				return
+			}
+		}
+	}
+
+	//action is reject, create and delete will get voting deleted on first reject
 	fUp, err := deleteVoting(fId, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskCreateAccept deleteVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskVotingResponse deleteVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

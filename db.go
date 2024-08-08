@@ -121,6 +121,20 @@ func InsertTask(fId primitive.ObjectID, task Task) (Floor, error) {
 	return fUpdated, nil
 }
 
+func deleteTask(fId primitive.ObjectID, taskId string) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$pull": bson.M{"tasks": bson.M{"id": taskId}}})
+	if err != nil {
+		return Floor{}, err
+	}
+	fUpdated, err := getUpdatedFloor(fId)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
 func InsertVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
 	_, err := collection.UpdateOne(context.Background(),
 		bson.M{"_id": fId},
@@ -163,6 +177,7 @@ func FindVoting(fId primitive.ObjectID, votingId int) (Voting, error) {
 }
 
 func updateVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
+	//TODO remove upsert option
 	_, err := collection.UpdateOne(context.Background(),
 		bson.M{"_id": fId},
 		bson.M{"$set": bson.M{"votings.$[elem]": voting}},
@@ -186,6 +201,20 @@ func deleteVoting(fId primitive.ObjectID, votingId int) (Floor, error) {
 	// 	bson.M{"_id": fId},
 	// 	bson.M{"$unset": bson.M{"votings.$[elem]": nil}},
 	// 	options.Update().SetArrayFilters(options.ArrayFilters{Filters: []interface{}{bson.M{"elem.id": votingId}}}))
+	if err != nil {
+		return Floor{}, err
+	}
+	fUpdated, err := getUpdatedFloor(fId)
+	if err != nil {
+		return Floor{}, err
+	}
+	return fUpdated, nil
+}
+
+func deleteAllVotings(fId primitive.ObjectID) (Floor, error) {
+	_, err := collection.UpdateOne(context.Background(),
+		bson.M{"_id": fId},
+		bson.M{"$unset": bson.M{"votings": []Voting{}}})
 	if err != nil {
 		return Floor{}, err
 	}
