@@ -1,1 +1,8 @@
 1. when just one room available for taking task and user press done, task does not get assigned to the same user again. Task assignee is set to null. The user would be confused if the task is assigned again back to him. The ideal fix would be to give a message that no one is available.
+2. notifications are only for "action required" items at the moment
+3. whole payload is send during voting notification:
+   } else if (Type === "VOTING_ADD") {
+     Object.assign(draft.floor.Votings, Payload);
+   }
+   * helps to keeps upto date with BE voting as it gets stale fast
+   * avoids findVotingById in FE and then push and then assign

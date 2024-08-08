@@ -209,24 +209,32 @@ func HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	time.AfterFunc(voting.VotingWindow, func() {
-		floor, err = FindFloor(floorId)
-		if err != nil {
-			logger.Error("createTask remove voting getFloor", slog.Any("error", err), slog.Any("request", request), slog.Any("votingToCreate", voting))
-			return
-		}
 		floor, err := deleteVoting(floor.Id, voting.Id)
 		if err != nil {
 			logger.Error("createTask delete voting", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("votingToCreate", voting))
 			return
 		}
-		//TODO send notification to all
+		//TODO check if silent notification possbile
 	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(floor)
 
-	//TODO send notification to all
+	sendCreateTaskNotification(floor, voting, "VOTING_ADD")
+}
+
+func sendCreateTaskNotification(floor Floor, voting Voting, nType string) {
+	votingJson, err := json.Marshal(floor.Votings)
+	if err != nil {
+		logger.Error("sendCreateTaskNotification marshalling voting to json", slog.Any("error", err))
+		return
+	}
+	for _, r := range floor.Rooms {
+		if r.Resident.Id != voting.CreatedBy {
+			sendNotification(r, votingJson, floor.Id.String()[10:len(floor.Id.String())-2], nType, "Request to create a new task")
+		}
+	}
 }
 
 func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +296,6 @@ func HandleAcceptTaskCreate(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(fUp)
-	return
 
 	// voting.Accepts += 1
 	// fUp, err := updateVoting(fId, voting)

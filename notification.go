@@ -18,6 +18,7 @@ func sendNotification(r Room, patch []byte, fId string, nType string, title stri
 
 	m["FloorId"] = fId
 	m["Type"] = nType
+	//TODO reanme to payload
 	m["Patch"] = string(patch)
 
 	pushMessage := &expo.PushMessage{
