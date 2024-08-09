@@ -88,6 +88,8 @@ type RegisterTokenRequest struct {
 // }
 
 var IsTest bool
+var userId string
+var floorId string
 var authService AuthService
 
 type services struct {
@@ -118,7 +120,7 @@ func main() {
 	http.HandleFunc("/generate-code", HandleCodeGeneration)
 	http.HandleFunc("/submit-code", HandleCodeSubmit)
 	http.HandleFunc("/add-newResident", HandleAddNewResident)
-	http.HandleFunc("/create-task", HandleTaskCreateDelete)
+	http.HandleFunc("/create-del-task", HandleTaskCreateDelete)
 	http.HandleFunc("/update-voting", HandleTaskVotingResponse)
 
 	defer disconnectMongo(ctx)

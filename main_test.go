@@ -129,7 +129,8 @@ var floorStub = `{
       "Order": 6,
       "Resident": null
     }
-  ]
+  ],
+	"Votings": []
 }
 `
 
