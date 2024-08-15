@@ -162,7 +162,6 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 }
 
 func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
-	floorId := "669fca69d244526d709f6d76"
 	userId := "1"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
@@ -190,16 +189,17 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		nextVotId = floor.Votings[len(floor.Votings)-1].Id + 1
 	}
+
 	voting := Voting{
-		Id:           nextVotId,
-		Type:         request.Action,
-		Data:         request.Task,
-		Accepts:      []string{},
-		Rejects:      []string{},
-		LaunchDate:   time.Now(),
-		VotingWindow: 10 * time.Second,
+		Id:         nextVotId,
+		Type:       request.Action,
+		Data:       request.Task,
+		Accepts:    []string{},
+		Rejects:    []string{},
+		LaunchDate: time.Now(),
+		// VotingWindow: 10 * time.Second,
 		CreatedBy:    userId,
-		// VotingWindow: 2 * 24 * time.Hour,
+		VotingWindow: 2 * 24 * time.Hour,
 	}
 
 	floor, err = InsertVoting(floor.Id, voting)
@@ -222,7 +222,7 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(floor)
 
-	// sendCreateDelTaskNotification(floor, voting, "VOTING_ADD")
+	sendCreateDelTaskNotification(floor, voting, "VOTING_ADD")
 }
 
 func sendCreateDelTaskNotification(floor Floor, voting Voting, nType string) {
@@ -296,7 +296,7 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 
 		if voting.Type == "CREATE_TASK" {
 			//TODO consistency check via accept count comparison
-			_, err = CreateTask(floor, voting.Data.(Task).Id)
+			_, err = CreateTask(floor, voting.Data.Id)
 			if err != nil {
 				logger.Error("taskVotingResponse createTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -305,7 +305,6 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 			//TODO send notification to all
 		} else if voting.Type == "DELETE_TASK" {
 			//check if all residents accepted delete, then delete else update voting
-			fmt.Println("deleteRequest", userId, floorId, request.Voting)
 
 			if contains(voting.Accepts, userId) {
 				w.Header().Set("Content-Type", "application/json")
@@ -315,7 +314,7 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 
 			voting.Accepts = append(voting.Accepts, userId)
 			if len(voting.Accepts) == len(floor.Rooms) {
-				_, err = deleteTask(floor.Id, voting.Data.(Task).Id)
+				_, err = deleteTask(floor.Id, voting.Data.Id)
 				if err != nil {
 					logger.Error("taskVotingResponse deleteTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
 					http.Error(w, err.Error(), http.StatusInternalServerError)

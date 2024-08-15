@@ -117,5 +117,6 @@ curl -v 'http://localhost:8080/floor/' \
       "Order": 6,
       "Resident": null
     }
-  ]
+  ],
+  "Votings": []
 }'

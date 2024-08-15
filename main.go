@@ -54,7 +54,7 @@ type Resident struct {
 type Voting struct {
 	Id           int           `bson:"id"`
 	Type         string        `bson:"type"`
-	Data         any           `bson:"data"`
+	Data         Task          `bson:"data"`
 	Accepts      []string      `bson:"accepts"`
 	Rejects      []string      `bson:"rejects"`
 	LaunchDate   time.Time     `bson:"date"`
@@ -89,7 +89,7 @@ type RegisterTokenRequest struct {
 
 var IsTest bool
 var userId string
-var floorId string
+var floorId = "669fca69d244526d709f6d76"
 var authService AuthService
 
 type services struct {

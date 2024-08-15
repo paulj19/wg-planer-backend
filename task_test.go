@@ -1253,6 +1253,7 @@ func Test_createTask(t *testing.T) {
 func Test_deleteTask(t *testing.T) {
 	t.Run("should create voting", func(t *testing.T) {
 		fId, err := primitive.ObjectIDFromHex("669fca69d244526d709f6d76")
+		floorId = fId.String()[10:34]
 		if err != nil {
 			t.Error(err)
 		}
@@ -1411,9 +1412,12 @@ func Test_deleteTask(t *testing.T) {
 		if updatedFloor.Tasks[0].Name != FloorStub.Tasks[0].Name && updatedFloor.Tasks[0].AssignedTo != FloorStub.Tasks[0].AssignedTo && updatedFloor.Tasks[0].Reminders != FloorStub.Tasks[0].Reminders && updatedFloor.Tasks[0].Id != FloorStub.Tasks[0].Id {
 			t.Errorf("task must not be updated: got %v want %v", updatedFloor.Tasks[0], FloorStub.Tasks[0])
 		}
+		deleteVoting(updatedFloor.Id, updatedFloor.Votings[0].Id)
 	})
+
 	t.Run("should delete task when all residents accept", func(t *testing.T) {
 		//this is a special setting for one time test, will not work if the FloorStub is not inserted as userId is taken as preset in the function or will be replaced by jwt
+		IsTest = true
 
 		FloorStub.Rooms = FloorStub.Rooms[:3]
 		f, err := insertTestFloor(FloorStub)
@@ -1422,7 +1426,7 @@ func Test_deleteTask(t *testing.T) {
 			t.Error(err)
 		}
 		tuStub := TaskVotingRequest{
-			Task:   FloorStub.Tasks[0],
+			Task:   f.Tasks[0],
 			Action: "DELETE_TASK",
 		}
 		tuStubStr, err := json.Marshal(tuStub)
@@ -1454,6 +1458,7 @@ func Test_deleteTask(t *testing.T) {
 		}
 
 		for i := 0; i < len(f.Rooms); i++ {
+			userId = strconv.Itoa(i + 1)
 			votingAccept := VotingActionRequest{
 				Voting: updatedFloor.Votings[0],
 				Action: "ACCEPT",
@@ -1490,11 +1495,13 @@ func Test_deleteTask(t *testing.T) {
 				if len(updatedFloor.Votings) != 0 {
 					t.Errorf("voting not deleted: got %v want %v", len(updatedFloor.Votings), 0)
 				}
-				if updatedFloor.Tasks[0].Name == FloorStub.Tasks[1].Name && updatedFloor.Tasks[0].AssignedTo == FloorStub.Tasks[1].AssignedTo && updatedFloor.Tasks[0].Reminders == FloorStub.Tasks[1].Reminders && updatedFloor.Tasks[0].Id == FloorStub.Tasks[1].Id {
-					t.Errorf("task not deleted: got %v want %v", updatedFloor.Tasks[0], FloorStub.Tasks[1])
+				for _, ta := range updatedFloor.Tasks {
+					if ta.Id == f.Tasks[0].Id {
+						t.Errorf("task not deleted: got %v want %v", updatedFloor.Tasks[0], FloorStub.Tasks[1])
+					}
 				}
 			} else {
-				if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow && len(updatedFloor.Votings[0].Accepts) != len(expectedVoting.Accepts) && updatedFloor.Votings[0].Accepts[0] != expectedVoting.Accepts[0] {
+				if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow && len(updatedFloor.Votings[0].Accepts) != i {
 					t.Errorf("voting not updated: got %v want %v", updatedFloor.Votings[0], expectedVoting)
 				}
 
@@ -1504,7 +1511,84 @@ func Test_deleteTask(t *testing.T) {
 			}
 		}
 	})
+	t.Run("should delete voting on reject", func(t *testing.T) {
+		f, err := insertTestFloor(FloorStub)
+		floorId = f.Id.String()[10:34]
+		if err != nil {
+			t.Error(err)
+		}
+		tuStub := TaskVotingRequest{
+			Task:   f.Tasks[0],
+			Action: "DELETE_TASK",
+		}
+		tuStubStr, err := json.Marshal(tuStub)
+		req, err := http.NewRequest("POST", "/create-del-task", bytes.NewReader(tuStubStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleTaskCreateDelete)
+		handler.ServeHTTP(rr, req)
 
+		if status := rr.Code; status != http.StatusCreated {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusCreated)
+		}
+
+		var updatedFloor Floor
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		expectedVoting := Voting{
+			Id:           1,
+			Type:         "DELETE_TASK",
+			Data:         tuStub.Task,
+			VotingWindow: 2 * 24 * time.Hour,
+		}
+
+		if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow {
+			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
+		}
+
+		votingAccept := VotingActionRequest{
+			Voting: updatedFloor.Votings[0],
+			Action: "REJECT",
+		}
+
+		votingAcceptStr, err := json.Marshal(votingAccept)
+		if err != nil {
+			t.Error(err)
+		}
+		req, err = http.NewRequest("POST", "/update-voting", bytes.NewReader(votingAcceptStr))
+		if err != nil {
+			t.Error(err)
+		}
+		rr = httptest.NewRecorder()
+		handler = http.HandlerFunc(HandleTaskVotingResponse)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			t.Errorf("handler returned wrong status code: got %v want %v",
+				status, http.StatusOK)
+		}
+
+		json.Unmarshal(rr.Body.Bytes(), &updatedFloor)
+
+		taskFound := false
+		for _, task := range updatedFloor.Tasks {
+			if task.Id == f.Tasks[0].Id {
+				taskFound = true
+				break
+			}
+		}
+
+		if !taskFound {
+			t.Errorf("Task %v must not be deleted on reject", f.Tasks[0])
+		}
+
+		if len(updatedFloor.Votings) != 0 {
+			t.Errorf("voting not deleted: got %v want %v", len(updatedFloor.Votings), 0)
+		}
+	})
 }
 
 func insertTestFloor(f Floor) (Floor, error) {
