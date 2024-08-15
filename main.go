@@ -51,6 +51,7 @@ type Resident struct {
 	ExpoPushToken string `bson:"expoPushToken"`
 }
 
+// voting ids, createdBy and accepts/rejects use userId
 type Voting struct {
 	Id           int           `bson:"id"`
 	Type         string        `bson:"type"`

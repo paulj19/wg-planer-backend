@@ -1429,6 +1429,7 @@ func Test_deleteTask(t *testing.T) {
 			Task:   f.Tasks[0],
 			Action: "DELETE_TASK",
 		}
+		userId = "1"
 		tuStubStr, err := json.Marshal(tuStub)
 		req, err := http.NewRequest("POST", "/create-del-task", bytes.NewReader(tuStubStr))
 		if err != nil {
@@ -1457,8 +1458,8 @@ func Test_deleteTask(t *testing.T) {
 			t.Errorf("voting not created: got %v want %v", updatedFloor.Votings[0], expectedVoting)
 		}
 
-		for i := 0; i < len(f.Rooms); i++ {
-			userId = strconv.Itoa(i + 1)
+		for i := 2; i < len(f.Rooms)-1; i++ {
+			userId = strconv.Itoa(i)
 			votingAccept := VotingActionRequest{
 				Voting: updatedFloor.Votings[0],
 				Action: "ACCEPT",
@@ -1488,7 +1489,7 @@ func Test_deleteTask(t *testing.T) {
 				Type:         "DELETE_TASK",
 				Data:         tuStub.Task,
 				VotingWindow: 2 * 24 * time.Hour,
-				Accepts:      []string{"1"},
+				Accepts:      []string{"2", "3"},
 			}
 
 			if i == len(f.Rooms)-1 {
@@ -1501,7 +1502,7 @@ func Test_deleteTask(t *testing.T) {
 					}
 				}
 			} else {
-				if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow && len(updatedFloor.Votings[0].Accepts) != i {
+				if updatedFloor.Votings[0].Type != expectedVoting.Type && updatedFloor.Votings[0].Data != expectedVoting.Data && updatedFloor.Votings[0].VotingWindow != expectedVoting.VotingWindow && len(updatedFloor.Votings[0].Accepts) != i-1 {
 					t.Errorf("voting not updated: got %v want %v", updatedFloor.Votings[0], expectedVoting)
 				}
 

@@ -313,7 +313,7 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 			}
 
 			voting.Accepts = append(voting.Accepts, userId)
-			if len(voting.Accepts) == len(floor.Rooms) {
+			if isAcceptedByAllResisdents(floor, voting) {
 				_, err = deleteTask(floor.Id, voting.Data.Id)
 				if err != nil {
 					logger.Error("taskVotingResponse deleteTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
@@ -346,17 +346,15 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(fUp)
+}
 
-	// voting.Accepts += 1
-	// fUp, err := updateVoting(fId, voting)
-	// if err != nil {
-	// 	logger.Error("taskCreateAccept updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// w.Header().Set("Content-Type", "application/json")
-	// json.NewEncoder(w).Encode(fUp)
+func isAcceptedByAllResisdents(f Floor, voting Voting) bool {
+	for _, r := range f.Rooms {
+		if !reflect.DeepEqual(r.Resident, Resident{}) && r.Resident.Available == true && !contains(voting.Accepts, r.Resident.Id) && r.Resident.Id != voting.CreatedBy {
+			return false
+		}
+	}
+	return true
 }
 
 func CreateTask(floor Floor, taskname string) (Floor, error) {
