@@ -9,11 +9,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"math/big"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -89,7 +91,6 @@ type RegisterTokenRequest struct {
 
 var IsTest bool
 var userId string
-var floorId = "669fca69d244526d709f6d76"
 var authService AuthService
 
 type services struct {
@@ -103,29 +104,55 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	initMongo(ctx)
-	services := services{taskService: TaskUpdateRequest{}}
-	// pubKey, err := initAuthServerPubKey()
-	// if err != nil {
-	// 	log.Fatal("Error initing public key", err)
-	// }
-
-	// initAuthService(AuthServiceImpl{pubKey: pubKey})
-
-	http.HandleFunc("/floor/", crudFloor)
-	http.HandleFunc("/post-login", startupInfo)
-	http.HandleFunc("/update-task", services.taskService.HandleTaskUpdate)
-	http.HandleFunc("/register-expo-token", registerExpoPushToken)
-	http.HandleFunc("/remind-task", services.taskService.HandleTaskRemind)
-	http.HandleFunc("/update-availability", HandleAvailabilityStatusChange)
-	http.HandleFunc("/generate-code", HandleCodeGeneration)
-	http.HandleFunc("/submit-code", HandleCodeSubmit)
-	http.HandleFunc("/add-newResident", HandleAddNewResident)
-	http.HandleFunc("/create-del-task", HandleTaskCreateDelete)
-	http.HandleFunc("/update-voting", HandleTaskVotingResponse)
-
 	defer disconnectMongo(ctx)
-	log.Println("Server running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	services := services{taskService: TaskUpdateRequest{}}
+	pubKey, err := initAuthServerPubKey()
+	if err != nil {
+		log.Fatal("Error initing public key", err)
+	}
+
+	initAuthService(AuthServiceImpl{pubKey: pubKey})
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/floor/", crudFloor)
+	mux.HandleFunc("/post-login", startupInfo)
+	mux.HandleFunc("/update-task", services.taskService.HandleTaskUpdate)
+	mux.HandleFunc("/register-expo-token", registerExpoPushToken)
+	mux.HandleFunc("/remind-task", services.taskService.HandleTaskRemind)
+	mux.HandleFunc("/update-availability", HandleAvailabilityStatusChange)
+	mux.HandleFunc("/generate-code", HandleCodeGeneration)
+	mux.HandleFunc("/submit-code", HandleCodeSubmit)
+	mux.HandleFunc("/add-newResident", HandleAddNewResident)
+	mux.HandleFunc("/create-del-task", HandleTaskCreateDelete)
+	mux.HandleFunc("/update-voting", HandleTaskVotingResponse)
+
+	authenticatedMux := authHandler(mux)
+	log.Println("Server running on port 8083")
+	log.Fatal(http.ListenAndServe(":8083", authenticatedMux))
+}
+
+func authHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/floor/") || strings.HasPrefix(r.URL.Path, "/sumbmit-code") {
+			h.ServeHTTP(w, r)
+			return
+		}
+		authToken := r.Header.Get("Authorization")
+		fmt.Println("authtoken", authToken)
+		if authToken == "" {
+			http.Error(w, "No auth token provided", http.StatusUnauthorized)
+			return
+		}
+		oid, err := authService.verifyToken(strings.TrimPrefix(authToken, "Bearer "))
+		if err != nil {
+			http.Error(w, "Error verifying token "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+		ctx := r.Context()
+		r = r.WithContext(context.WithValue(ctx, "userID", oid))
+		h.ServeHTTP(w, r)
+	})
 }
 
 func initAuthService(as AuthService) {
@@ -133,19 +160,15 @@ func initAuthService(as AuthService) {
 }
 
 func startupInfo(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("startupInfo")
 	corsHandler(w)
-	// authToken := r.Header.Get("Authorization")
-	// if authToken == "" {
-	// 	http.Error(w, "No token provided", http.StatusUnauthorized)
-	// }
-	// authToken = authToken[7:]
-	// floorId, err := authService.verifyToken(authToken)
-	// if err != nil {
-	// 	return
-	// }
-
-	floorId := "669fca69d244526d709f6d76"
-	floor, err := FindFloor(floorId)
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		http.Error(w, "Error getting userID from context", http.StatusInternalServerError)
+		return
+	}
+	floor, err := FindFloorByUserID(userID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			http.Error(w, "Floor not found", http.StatusNotFound)
@@ -155,19 +178,12 @@ func startupInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userprofile := UserProfile{
-		Id:         2,
-		Username:   "Paulo",
-		Email:      "maxmuster@gmail.com",
-		FloorId:    "66603e2a00afb9bb44b3cadb",
-		Oid:        1,
-		AuthServer: "HOME_BREW",
+	// TODO put this as async promise in frontend
+	userprofile, err := authService.getUserProfile(r)
+	if err != nil {
+		http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	// userprofile, err := authService.getUserProfile(authToken)
-	// if err != nil {
-	// 	http.Error(w, "Error getting user profile "+err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
 	if userprofile == (UserProfile{}) {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -239,7 +255,6 @@ func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
 			found = true
 			break
 		}
-
 	}
 	if !found {
 		logger.Error("registerTokenRequest", slog.Any("error", "User not found in floor"), slog.Any("registerTokenRequest", registerTokenRequest), slog.Any("floor", floor))
@@ -259,7 +274,7 @@ func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
 func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", "http://192.168.0.108:8081/oauth2/jwks", nil)
+	req, err := http.NewRequest("GET", "http://localhost:8080/oauth2/jwks", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating http request: %w", err)
 	}
@@ -267,7 +282,12 @@ func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error getting JWKS: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("Error closing body", err)
+		}
+	}(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Error getting JWKS: %w", err)
 	}

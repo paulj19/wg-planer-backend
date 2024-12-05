@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -162,7 +161,13 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 }
 
 func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
-	userId := "1"
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		logger.Error("createDeleteTask getting userId from context")
+		http.Error(w, "UserID not found in context", http.StatusInternalServerError)
+		return
+	}
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -174,7 +179,7 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := FindFloor(floorId)
+	floor, err := FindFloorByUserID(userID)
 	if err != nil {
 		logger.Error("createDeleteTask  getFloor", slog.Any("error", err), slog.Any("requst", request))
 		if err == mongo.ErrNoDocuments {
@@ -260,18 +265,32 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		logger.Error("taskCreateAccept getting userId from context")
+		http.Error(w, "UserID not found in context", http.StatusInternalServerError)
+		return
+	}
+
+	floor, err := FindFloorByUserID(userID)
+	if err != nil {
+		logger.Error("taskVotingResponse getFloor", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", r))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	var request VotingActionRequest
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err = json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		logger.Error("taskCreateAccept decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fId, _ := primitive.ObjectIDFromHex(floorId)
-	voting, err := FindVoting(fId, request.Voting.Id)
+	voting, err := FindVoting(floor.Id, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("user id", userID), slog.Any("request", request))
 		if strings.Contains(err.Error(), "not found") {
 			//TODO just a hack as no notification is sent, some stale notifications can exist
 			// http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
@@ -287,13 +306,6 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 
 	//action is accept, can be create or delete task
 	if request.Action == "ACCEPT" {
-		floor, err := FindFloor(floorId)
-		if err != nil {
-			logger.Error("taskVotingResponse getFloor", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		if voting.Type == "CREATE_TASK" {
 			//TODO consistency check via accept count comparison
 			_, err = CreateTask(floor, voting.Data.Id)
@@ -322,9 +334,9 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 					//TODO consistency check via accept count comparison
 				}
 			} else {
-				fUp, err := updateVoting(fId, voting)
+				fUp, err := updateVoting(floor.Id, voting)
 				if err != nil {
-					logger.Error("taskVotingResponse updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+					logger.Error("taskVotingResponse updateVoting", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", request))
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -337,9 +349,9 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//action is reject, create and delete will get voting deleted on first reject
-	fUp, err := deleteVoting(fId, request.Voting.Id)
+	fUp, err := deleteVoting(floor.Id, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskVotingResponse deleteVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskVotingResponse deleteVoting", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", request))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -75,6 +75,15 @@ func FindFloor(floorId string) (Floor, error) {
 	return floor, nil
 }
 
+func FindFloorByUserID(rId string) (Floor, error) {
+	var floor Floor
+	err := collection.FindOne(context.Background(), bson.M{"rooms.resident.id": rId}).Decode(&floor)
+	if err != nil {
+		return floor, err
+	}
+	return floor, nil
+}
+
 func deleteTestFloors(fIds []primitive.ObjectID) {
 	_, err := collection.DeleteMany(context.Background(), bson.M{"_id": bson.M{"$in": fIds}})
 	if err != nil {
@@ -150,6 +159,20 @@ func InsertVoting(fId primitive.ObjectID, voting Voting) (Floor, error) {
 	return fUpdated, nil
 }
 
+func FindVotingByUserID(userID string, votingID int) (Voting, error) {
+	var voting Voting
+	filter := bson.M{
+		"$and": []bson.M{
+			{"rooms.resident.id": userID},
+			{"votings.id": votingID},
+		},
+	}
+	err := collection.FindOne(context.Background(), filter).Decode(&voting)
+	if err != nil {
+		return Voting{}, err
+	}
+	return voting, nil
+}
 func FindVoting(fId primitive.ObjectID, votingId int) (Voting, error) {
 	var voting Voting
 	//TODO make it work
