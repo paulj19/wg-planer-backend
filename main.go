@@ -90,7 +90,6 @@ type RegisterTokenRequest struct {
 // }
 
 var IsTest bool
-var userId string
 var authService AuthService
 
 type services struct {
@@ -134,7 +133,7 @@ func main() {
 
 func authHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/floor/") || strings.HasPrefix(r.URL.Path, "/sumbmit-code") {
+		if strings.HasPrefix(r.URL.Path, "/floor/") || strings.HasPrefix(r.URL.Path, "/submit-code") || strings.HasPrefix(r.URL.Path, "/add-newResident") {
 			h.ServeHTTP(w, r)
 			return
 		}
@@ -203,6 +202,9 @@ func crudFloor(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Error reading request body", err)
 			http.Error(w, "Error reading request body, bad format", http.StatusBadRequest)
 			return
+		}
+		for i, _ := range floor.Tasks {
+			floor.Tasks[i].AssignedTo = -1
 		}
 		newFloor, err := insertNewFloor(floor)
 		if err != nil {
