@@ -127,8 +127,8 @@ func main() {
 	mux.HandleFunc("/update-voting", HandleTaskVotingResponse)
 
 	authenticatedMux := authHandler(mux)
-	log.Println("Server running on port 8083")
-	log.Fatal(http.ListenAndServe(":8083", authenticatedMux))
+	log.Println("Server running on port 8080")
+	log.Fatal(http.ListenAndServe(":8080", authenticatedMux))
 }
 
 func authHandler(h http.Handler) http.Handler {
@@ -276,7 +276,7 @@ func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
 func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", "http://localhost:8080/oauth2/jwks", nil)
+	req, err := http.NewRequest("GET", "http://188.245.181.59:8081/oauth2/jwks", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating http request: %w", err)
 	}

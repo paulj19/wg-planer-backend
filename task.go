@@ -124,6 +124,13 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	roomIndex, err := findTaskAssignedRoomIndex(f.Tasks, taskIndex, f.Rooms)
+	if err != nil {
+		logger.Error("taskRemind findTaskAssignedRoomIndex", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
 	if f.Tasks[taskIndex].AssignedTo != tu.Task.AssignedTo {
 		logger.Error("taskRemind checkConsistency", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		http.Error(w, "Task assignee changed in between", http.StatusUnprocessableEntity)
@@ -142,14 +149,14 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(f)
 
-	taskJSON, err := json.Marshal(f.Tasks[taskIndex])
+	taskJSON, err := json.Marshal([]Task{f.Tasks[taskIndex]})
 	if err != nil {
 		logger.Error("taskUpdate marshalling task to json", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	for i := 0; i < 3; i++ {
-		err = sendNotification(f.Rooms[taskIndex], taskJSON, f.Id.String()[10:len(f.Id.String())-2], "TASK_REMINDER", fmt.Sprintf("You have been remined about %s!", f.Tasks[taskIndex].Name))
+		err = sendNotification(f.Rooms[roomIndex], taskJSON, f.Id.String()[10:len(f.Id.String())-2], "TASK_REMINDER", fmt.Sprintf("You have been reminded about %s!", f.Tasks[taskIndex].Name))
 		if err != nil {
 			logger.Error("taskRemind sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		} else {
@@ -472,6 +479,15 @@ func findTaskIndex(tasks []Task, taskID string) (int, error) {
 		}
 	}
 	return -1, fmt.Errorf("Task not found")
+}
+
+func findTaskAssignedRoomIndex(tasks []Task, taskIndex int, rooms []Room) (int, error) {
+	for i, r := range rooms {
+		if tasks[taskIndex].AssignedTo == r.Id {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("task assigned room not found")
 }
 
 func findRoom(rooms []Room, userId string) (int, int, error) {
