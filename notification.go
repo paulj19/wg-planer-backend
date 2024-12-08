@@ -7,6 +7,9 @@ import (
 )
 
 func sendNotification(r Room, patch []byte, fId string, nType string, title string) error {
+    if r.Resident.Id == "" {
+        return nil
+    }
 	pushToken, err := expo.NewExponentPushToken(r.Resident.ExpoPushToken)
 	if err != nil {
 		return fmt.Errorf("error creating push token from %s: %w", r.Resident.ExpoPushToken, err)

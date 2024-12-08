@@ -42,15 +42,14 @@ var codeMap = make(map[string]CodeMapEntry)
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
-	floorId := "669fca69d244526d709f6d76"
-	var userId = "1"
-	if r.UserAgent() == "okhttp/4.9.2" {
-		userId = "2"
-	} else {
-		userId = "1"
-	}
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
+		return
+	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		http.Error(w, "Error getting userID from context", http.StatusInternalServerError)
 		return
 	}
 	var taskUpdate TaskUpdateRequest
@@ -60,7 +59,7 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := FindFloor(floorId)
+	floor, err := FindFloorByUserID(userID)
 	if err != nil {
 		logger.Error("availabilityStatusChange getFloor", slog.Any("error", err), slog.Any("taskUpdate", taskUpdate))
 		if err == mongo.ErrNoDocuments {
@@ -69,8 +68,7 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var fUp Floor
-
-	roomIndex, err := findRoom(floor.Rooms, userId)
+	roomIndex, roomID, err := findRoom(floor.Rooms, userID)
 
 	if err != nil {
 		logger.Error("taskUpdate findRoom", slog.Any("error", err), slog.Any("floor", floor), slog.Any("taskToUpdate", taskUpdate))
@@ -82,7 +80,7 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 	if taskUpdate.Action == "RESIDENT_AVAILABLE" {
 		floor.Rooms[roomIndex].Resident.Available = true
 	} else if taskUpdate.Action == "RESIDENT_UNAVAILABLE" {
-		taskUpdateResult, err = processTaskUpdate(&floor, taskUpdate)
+		taskUpdateResult, err = processTaskUpdate(&floor, taskUpdate, roomID)
 		if err != nil {
 			if strings.HasPrefix(err.Error(), "taskUpdate updating DB tasks:") {
 				logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", taskUpdateResult.Floor), slog.Any("taskUpdate", taskUpdateResult.TasksUpdated))
@@ -137,12 +135,26 @@ func HandleAvailabilityStatusChange(w http.ResponseWriter, r *http.Request) {
 
 func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 	corsHandler(w)
-	floorId := "669fca69d244526d709f6d76"
 	if r.Method == http.MethodOptions {
 		return
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		http.Error(w, "Error getting userID from context", http.StatusInternalServerError)
+		return
+	}
+	floor, err := FindFloorByUserID(userID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Floor not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Error getting floor "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	var args CodeGenRequest
-	err := json.NewDecoder(r.Body).Decode(&args)
+	err = json.NewDecoder(r.Body).Decode(&args)
 	if err != nil {
 		logger.Error("codeGeneration decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -153,7 +165,7 @@ func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 		Code: code,
 	}
 	codeMap[code] = CodeMapEntry{
-		FloorId: floorId,
+		FloorId: strings.TrimSuffix(strings.TrimPrefix(floor.Id.String(), "ObjectID(\""), "\")"),
 		Room:    args.Room,
 	}
 	time.AfterFunc(20*time.Minute, func() {
@@ -165,7 +177,6 @@ func HandleCodeGeneration(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
-	floorId := "669fca69d244526d709f6d76"
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -183,7 +194,7 @@ func HandleCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Code not found", http.StatusUnprocessableEntity)
 		return
 	}
-	floor, err := FindFloor(floorId)
+	floor, err := FindFloor(args.FloorId)
 	if err != nil {
 		logger.Error("codeSubmit getFloor", slog.Any("error", err), slog.Any("args", args))
 		if err == mongo.ErrNoDocuments {

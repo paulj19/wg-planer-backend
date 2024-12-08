@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -62,7 +61,7 @@ func (s TaskUpdateRequest) HandleTaskUpdate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	taskUpdateResult, err := processTaskUpdate(&floor, taskUpdate)
+	taskUpdateResult, err := processTaskUpdate(&floor, taskUpdate, -1)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "taskUpdate updating DB tasks:") {
 			logger.Error("taskUpdate updating DB tasks", slog.Any("error", err), slog.Any("floor", taskUpdateResult.Floor), slog.Any("taskUpdate", taskUpdate))
@@ -125,6 +124,13 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	roomIndex, err := findTaskAssignedRoomIndex(f.Tasks, taskIndex, f.Rooms)
+	if err != nil {
+		logger.Error("taskRemind findTaskAssignedRoomIndex", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+
 	if f.Tasks[taskIndex].AssignedTo != tu.Task.AssignedTo {
 		logger.Error("taskRemind checkConsistency", slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		http.Error(w, "Task assignee changed in between", http.StatusUnprocessableEntity)
@@ -143,14 +149,14 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(f)
 
-	taskJSON, err := json.Marshal(f.Tasks[taskIndex])
+	taskJSON, err := json.Marshal([]Task{f.Tasks[taskIndex]})
 	if err != nil {
 		logger.Error("taskUpdate marshalling task to json", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	for i := 0; i < 3; i++ {
-		err = sendNotification(f.Rooms[taskIndex], taskJSON, f.Id.String()[10:len(f.Id.String())-2], "TASK_REMINDER", fmt.Sprintf("You have been remined about %s!", f.Tasks[taskIndex].Name))
+		err = sendNotification(f.Rooms[roomIndex], taskJSON, f.Id.String()[10:len(f.Id.String())-2], "TASK_REMINDER", fmt.Sprintf("You have been reminded about %s!", f.Tasks[taskIndex].Name))
 		if err != nil {
 			logger.Error("taskRemind sendNotification attempt: "+strconv.Itoa(i+1), slog.Any("error", err), slog.Any("floor", f), slog.Any("taskToRemind", tu.Task))
 		} else {
@@ -162,7 +168,13 @@ func (s TaskUpdateRequest) HandleTaskRemind(w http.ResponseWriter, r *http.Reque
 }
 
 func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
-	userId := "1"
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		logger.Error("createDeleteTask getting userId from context")
+		http.Error(w, "UserID not found in context", http.StatusInternalServerError)
+		return
+	}
 	corsHandler(w)
 	if r.Method == http.MethodOptions {
 		return
@@ -174,7 +186,7 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	floor, err := FindFloor(floorId)
+	floor, err := FindFloorByUserID(userID)
 	if err != nil {
 		logger.Error("createDeleteTask  getFloor", slog.Any("error", err), slog.Any("requst", request))
 		if err == mongo.ErrNoDocuments {
@@ -198,7 +210,7 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 		Rejects:    []string{},
 		LaunchDate: time.Now(),
 		// VotingWindow: 10 * time.Second,
-		CreatedBy:    userId,
+		CreatedBy:    userID,
 		VotingWindow: 2 * 24 * time.Hour,
 	}
 
@@ -260,18 +272,32 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
+	ctx := r.Context()
+	userID, ok := ctx.Value("userID").(string)
+	if !ok {
+		logger.Error("taskCreateAccept getting userId from context")
+		http.Error(w, "UserID not found in context", http.StatusInternalServerError)
+		return
+	}
+
+	floor, err := FindFloorByUserID(userID)
+	if err != nil {
+		logger.Error("taskVotingResponse getFloor", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", r))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	var request VotingActionRequest
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err = json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		logger.Error("taskCreateAccept decoding data payload", slog.Any("error", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fId, _ := primitive.ObjectIDFromHex(floorId)
-	voting, err := FindVoting(fId, request.Voting.Id)
+	voting, err := FindVoting(floor.Id, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("user id", userID), slog.Any("request", request))
 		if strings.Contains(err.Error(), "not found") {
 			//TODO just a hack as no notification is sent, some stale notifications can exist
 			// http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
@@ -281,22 +307,15 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if voting.CreatedBy == userId && !IsTest {
+	if voting.CreatedBy == userID && !IsTest {
 		return
 	}
 
 	//action is accept, can be create or delete task
 	if request.Action == "ACCEPT" {
-		floor, err := FindFloor(floorId)
-		if err != nil {
-			logger.Error("taskVotingResponse getFloor", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		if voting.Type == "CREATE_TASK" {
 			//TODO consistency check via accept count comparison
-			_, err = CreateTask(floor, voting.Data.Id)
+			_, err = CreateTask(floor, voting.Data.Name)
 			if err != nil {
 				logger.Error("taskVotingResponse createTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -306,14 +325,20 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 		} else if voting.Type == "DELETE_TASK" {
 			//check if all residents accepted delete, then delete else update voting
 
-			if contains(voting.Accepts, userId) {
+			if contains(voting.Accepts, userID) {
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(floor)
 				return
 			}
 
-			voting.Accepts = append(voting.Accepts, userId)
-			if isAcceptedByAllResisdents(floor, voting) {
+			voting.Accepts = append(voting.Accepts, userID)
+			availableRooms := 0
+			for _, r := range floor.Rooms {
+				if r.Resident.Id != "" && r.Resident.Id != voting.CreatedBy {
+					availableRooms += 1
+				}
+			}
+			if len(voting.Accepts) == availableRooms {
 				_, err = deleteTask(floor.Id, voting.Data.Id)
 				if err != nil {
 					logger.Error("taskVotingResponse deleteTask", slog.Any("error", err), slog.Any("floor", floor), slog.Any("request", request), slog.Any("voting", voting))
@@ -322,9 +347,9 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 					//TODO consistency check via accept count comparison
 				}
 			} else {
-				fUp, err := updateVoting(fId, voting)
+				fUp, err := updateVoting(floor.Id, voting)
 				if err != nil {
-					logger.Error("taskVotingResponse updateVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+					logger.Error("taskVotingResponse updateVoting", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", request))
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -337,9 +362,9 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//action is reject, create and delete will get voting deleted on first reject
-	fUp, err := deleteVoting(fId, request.Voting.Id)
+	fUp, err := deleteVoting(floor.Id, request.Voting.Id)
 	if err != nil {
-		logger.Error("taskVotingResponse deleteVoting", slog.Any("error", err), slog.Any("floor id", fId), slog.Any("request", request))
+		logger.Error("taskVotingResponse deleteVoting", slog.Any("error", err), slog.Any("floor id", floor.Id), slog.Any("request", request))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -378,12 +403,11 @@ func CreateTask(floor Floor, taskname string) (Floor, error) {
 	return fUp, nil
 }
 
-func processTaskUpdate(floor *Floor, tu TaskUpdateRequest) (TaskUpdateResult, error) {
+func processTaskUpdate(floor *Floor, tu TaskUpdateRequest, roomID int) (TaskUpdateResult, error) {
 	var tasksToUpdate []Task
 	if tu.Action == "RESIDENT_UNAVAILABLE" {
-		roomId := 0
 		for _, t := range floor.Tasks {
-			if t.AssignedTo == roomId {
+			if t.AssignedTo == roomID {
 				tasksToUpdate = append(tasksToUpdate, t)
 			}
 		}
@@ -455,10 +479,28 @@ func findTaskIndex(tasks []Task, taskID string) (int, error) {
 	return -1, fmt.Errorf("Task not found")
 }
 
-func findRoom(rooms []Room, userId string) (int, error) {
+func findTaskAssignedRoomIndex(tasks []Task, taskIndex int, rooms []Room) (int, error) {
+	for i, r := range rooms {
+		if tasks[taskIndex].AssignedTo == r.Id {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("task assigned room not found")
+}
+
+func findRoom(rooms []Room, userId string) (int, int, error) {
 	for i, r := range rooms {
 		if r.Resident.Id == userId {
-			return i, nil
+			return i, r.Id, nil
+		}
+	}
+	return -1, -1, fmt.Errorf("Room not found")
+}
+
+func findRoomId(rooms []Room, userId string) (int, error) {
+	for _, r := range rooms {
+		if r.Resident.Id == userId {
+			return r.Id, nil
 		}
 	}
 	return -1, fmt.Errorf("Room not found")
@@ -466,6 +508,7 @@ func findRoom(rooms []Room, userId string) (int, error) {
 
 func findRoomById(rooms []Room, roomId int) (int, error) {
 	for i, r := range rooms {
+		fmt.Println("r.Id", r.Id, "roomId", roomId)
 		if r.Id == roomId {
 			return i, nil
 		}

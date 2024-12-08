@@ -6,3 +6,4 @@
    }
    * helps to keeps upto date with BE voting as it gets stale fast
    * avoids findVotingById in FE and then push and then assign
+11. initially room.resident is empty and go stores default as id:0 avail:false name: '', this is bad. So to see if a room has a residnet, check if id is 0, this is bad, it should be made explicit like a null
