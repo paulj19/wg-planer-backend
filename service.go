@@ -43,7 +43,6 @@ func (as AuthServiceImpl) getUserProfile(r *http.Request) (UserProfile, error) {
 	defer resp.Body.Close()
 	var userProfile UserProfile
 	err = json.NewDecoder(resp.Body).Decode(&userProfile)
-	fmt.Println("userProfile", userProfile, err)
 	if err != nil {
 		logger.Error("Error decoding user profile", slog.Any("error", err))
 		return UserProfile{}, fmt.Errorf("Error decoding user profile: %w", err)
@@ -52,7 +51,6 @@ func (as AuthServiceImpl) getUserProfile(r *http.Request) (UserProfile, error) {
 }
 
 func (as AuthServiceImpl) verifyToken(authToken string) (string, error) {
-	fmt.Println("authtoken", authToken)
 	var claims jwt.MapClaims
 	token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
 		return as.pubKey, nil
@@ -78,7 +76,6 @@ func (as AuthServiceImpl) verifyToken(authToken string) (string, error) {
 			log.Println("Token is not valid:", err)
 		}
 	}
-	fmt.Println("claims", claims)
 	oid, ok := claims["oid"].(float64) // JWT claims are often parsed as float64
 	if !ok {
 		return "", fmt.Errorf("oid claim is not an int")

@@ -300,10 +300,11 @@ func HandleTaskVotingResponse(w http.ResponseWriter, r *http.Request) {
 		logger.Error("taskCreateAccept findVoting", slog.Any("error", err), slog.Any("user id", userID), slog.Any("request", request))
 		if strings.Contains(err.Error(), "not found") {
 			//TODO just a hack as no notification is sent, some stale notifications can exist
-			// http.Error(w, "Voting not found", http.StatusUnprocessableEntity)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(floor)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -508,7 +509,6 @@ func findRoomId(rooms []Room, userId string) (int, error) {
 
 func findRoomById(rooms []Room, roomId int) (int, error) {
 	for i, r := range rooms {
-		fmt.Println("r.Id", r.Id, "roomId", roomId)
 		if r.Id == roomId {
 			return i, nil
 		}

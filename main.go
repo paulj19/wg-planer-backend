@@ -139,7 +139,6 @@ func authHandler(h http.Handler) http.Handler {
 			return
 		}
 		authToken := r.Header.Get("Authorization")
-		fmt.Println("authtoken", authToken)
 		if authToken == "" {
 			http.Error(w, "No auth token provided", http.StatusUnauthorized)
 			return
@@ -160,7 +159,6 @@ func initAuthService(as AuthService) {
 }
 
 func startupInfo(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("startupInfo")
 	corsHandler(w)
 	ctx := r.Context()
 	userID, ok := ctx.Value("userID").(string)
@@ -200,7 +198,6 @@ func crudFloor(w http.ResponseWriter, r *http.Request) {
 		var floor Floor
 		err := json.NewDecoder(r.Body).Decode(&floor)
 		if err != nil {
-			fmt.Println("Error reading request body", err)
 			http.Error(w, "Error reading request body, bad format", http.StatusBadRequest)
 			return
 		}
