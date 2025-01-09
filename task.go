@@ -209,7 +209,6 @@ func HandleTaskCreateDelete(w http.ResponseWriter, r *http.Request) {
 		Accepts:    []string{},
 		Rejects:    []string{},
 		LaunchDate: time.Now(),
-		// VotingWindow: 10 * time.Second,
 		CreatedBy:    userID,
 		VotingWindow: 2 * 24 * time.Hour,
 	}

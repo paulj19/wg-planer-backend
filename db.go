@@ -15,14 +15,15 @@ import (
 
 var collection *mongo.Collection
 var client *mongo.Client
-var DB_URI = "mongodb://localhost:27018"
+// var DB_URI = "mongodb://localhost:27018"
+var DB_URI = value := os.Getenv("MONGO_URL")
 
 func initMongo(ctx context.Context) {
 	credential := options.Credential{
 		AuthMechanism: "SCRAM-SHA-256",
 		AuthSource:    "admin",
-		Username:      "wg-planer",
-		Password:      "secret",
+		Username:      "goBE_mongodb",
+		Password:      "361c61dab61a9ed9fa598ea42c89d9e2",
 	}
 	var err error
 	log.Println("connecting to db: ", DB_URI)
