@@ -17,7 +17,7 @@ import (
 var collection *mongo.Collection
 var client *mongo.Client
 // var DB_URI = "mongodb://localhost:27018"
-var DB_URI = os.Getenv("MONGO_URL")
+var DB_URI = "mongodb://dokku-mongo-goBE-mongodb:27017"
 
 func initMongo(ctx context.Context) {
 	credential := options.Credential{
