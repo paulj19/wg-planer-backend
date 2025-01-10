@@ -16,7 +16,7 @@ import (
 var collection *mongo.Collection
 var client *mongo.Client
 // var DB_URI = "mongodb://localhost:27018"
-var DB_URI = "mongodb://dokku-mongo-goBE-mongodb:27017/?ssl=false&authSource=admin"
+var DB_URI = "mongodb://goBE_mongodb:361c61dab61a9ed9fa598ea42c89d9e2@dokku-mongo-goBE-mongodb:27017/goBE_mongodb"
 
 func initMongo(ctx context.Context) {
 	credential := options.Credential{
@@ -27,7 +27,7 @@ func initMongo(ctx context.Context) {
 	}
 	var err error
 	log.Println("connecting to db: ", DB_URI)
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI(DB_URI).SetAuth(credential))
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(DB_URI))
 	if err != nil {
 		log.Fatal(err)
 	}
