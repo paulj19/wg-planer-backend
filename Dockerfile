@@ -1,5 +1,5 @@
 # Use the official Golang image to build the Go application
-FROM golang:1.20 as builder
+FROM golang:1.23 as builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go application
-RUN go build -o main .
+RUN go build -o main.go .
 
 # Use a minimal base image to run the Go application
 FROM alpine:latest
