@@ -1,32 +1,28 @@
 # Use the official Golang image to build the Go application
 FROM golang:1.23 as builder
+# syntax=docker/dockerfile:1
 
-# Set the working directory inside the container
+
+# Set destination for COPY
 WORKDIR /app
 
-# Copy the Go modules manifests
+# Download Go modules
 COPY go.mod go.sum ./
-
-# Download the Go modules
 RUN go mod download
 
-# Copy the source code
-COPY . .
+# Copy the source code. Note the slash at the end, as explained in
+# https://docs.docker.com/reference/dockerfile/#copy
+COPY *.go ./
 
-# Build the Go application
-RUN go build -o main.go .
+# Build
+RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-gs-ping
 
-# Use a minimal base image to run the Go application
-FROM alpine:latest
-
-# Set the working directory inside the container
-WORKDIR /root/
-
-# Copy the compiled Go binary from the builder stage
-COPY --from=builder /app/main .
-
-# Expose the port the app runs on
+# Optional:
+# To bind to a TCP port, runtime parameters must be supplied to the docker command.
+# But we can document in the Dockerfile what ports
+# the application is going to listen on by default.
+# https://docs.docker.com/reference/dockerfile/#expose
 EXPOSE 8080
 
-# Command to run the Go application
-CMD ["./main"]
+# Run
+CMD ["/docker-gs-ping"]
