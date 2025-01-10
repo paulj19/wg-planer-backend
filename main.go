@@ -274,7 +274,7 @@ func registerExpoPushToken(w http.ResponseWriter, r *http.Request) {
 func getJwksFromAuthServer() (map[string][]map[string]interface{}, error) {
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", "http://172.12.0.3:8081/oauth2/jwks", nil)
+	req, err := http.NewRequest("GET", "http://172.17.0.3:8081/oauth2/jwks", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating http request: %w", err)
 	}
