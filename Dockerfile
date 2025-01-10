@@ -1,7 +1,5 @@
 # Use the official Golang image to build the Go application
 FROM golang:1.23 as builder
-# syntax=docker/dockerfile:1
-
 
 # Set destination for COPY
 WORKDIR /app
