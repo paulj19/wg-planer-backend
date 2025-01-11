@@ -6,6 +6,7 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"os"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,8 +17,8 @@ import (
 var collection *mongo.Collection
 var client *mongo.Client
 // var DB_URI = "mongodb://localhost:27018"
-// var DB_URI = os.Getenv("MONGO_URL")
-var DB_URI = "mongodb://wg-planer:1a865dab20bcbdd2a6015d4b81bb594d@172.17.0.6:27017/wg_planer"
+var DB_URI = os.Getenv("MONGO_URL")
+// var DB_URI = "mongodb://wg-planer:1a865dab20bcbdd2a6015d4b81bb594d@172.17.0.6:27017/wg_planer"
 
 func initMongo(ctx context.Context) {
 // 	credential := options.Credential{
