@@ -21,7 +21,7 @@ var DB_URI = "mongodb://wg-planer:1a865dab20bcbdd2a6015d4b81bb594d@172.17.0.6:27
 
 func initMongo(ctx context.Context) {
 	credential := options.Credential{
-		AuthMechanism: "SCRAM-SHA-256",
+// 		AuthMechanism: "SCRAM-SHA-256",
 // 		AuthSource:    "admin",
 		Username:      "wg-planer",
 		Password:      "1a865dab20bcbdd2a6015d4b81bb594d",
