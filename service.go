@@ -27,7 +27,7 @@ func (as AuthServiceImpl) getUserProfile(r *http.Request) (UserProfile, error) {
 	}
 
 	httpClient := &http.Client{}
-	req, err := http.NewRequest("GET", "http://172.17.0.3:8082/userprofile", nil)
+	req, err := http.NewRequest("GET", "http://172.17.0.5:8082/userprofile", nil)
 	req.Header.Add("Authorization", authToken)
 	if err != nil {
 		logger.Error("Error creating http request", slog.Any("error", err))
