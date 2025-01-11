@@ -36,7 +36,7 @@ func initMongo(ctx context.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	collection = client.Database("wg-planer").Collection("floor")
+	collection = client.Database("wg_planer").Collection("floor")
 }
 
 func disconnectMongo(ctx context.Context) {
