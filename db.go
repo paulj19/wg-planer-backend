@@ -20,15 +20,15 @@ var client *mongo.Client
 var DB_URI = "mongodb://wg-planer:1a865dab20bcbdd2a6015d4b81bb594d@172.17.0.6:27017/wg_planer"
 
 func initMongo(ctx context.Context) {
-	credential := options.Credential{
-// 		AuthMechanism: "SCRAM-SHA-256",
-// 		AuthSource:    "admin",
-		Username:      "wg-planer",
-		Password:      "1a865dab20bcbdd2a6015d4b81bb594d",
-	}
+// 	credential := options.Credential{
+		AuthMechanism: "SCRAM-SHA-256",
+		AuthSource:    "admin",
+// 		Username:      "wg-planer",
+// 		Password:      "1a865dab20bcbdd2a6015d4b81bb594d",
+// 	}
 	var err error
 	log.Println("connecting to db: ", DB_URI)
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI(DB_URI).SetAuth(credential))
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(DB_URI))
 	if err != nil {
 		log.Fatal(err)
 	}
